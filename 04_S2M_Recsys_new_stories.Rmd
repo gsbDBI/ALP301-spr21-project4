@@ -1,0 +1,445 @@
+---
+title: 'ALP 301: Stones2Milestones, Recommendation Systems (Exploring Cold Start Problem)'
+output:
+  html_document:
+    highlight: haddock
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+date: "April 2021"
+---
+
+```{r setup, message = FALSE, warning = FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse)
+pacman::p_load(here)
+pacman::p_load(lmtest)
+pacman::p_load(glue)
+pacman::p_load(broom)
+pacman::p_load(ri2)
+pacman::p_load(margins)
+pacman::p_load(glmnet) 
+pacman::p_load(kableExtra)
+pacman::p_load(stargazer)
+pacman::p_load(knitr)
+pacman::p_load(doParallel)
+pacman::p_load(corrplot)
+
+rm(list = ls())
+
+```
+
+## Introduction: Cold Start Recommendation
+
+In previous tutorials, the majority of methods we tried belong to collaborative filtering, i.e. using the user-item interaction data. As you might be aware, collaborative filtering suffers from the cold-start problem: there is no data for new users or new items, and so the algorithm (a) cannot make recommendations for new users; (b) cannot include new items into the recommended list for users. 
+
+In many industry settings, people would deploy specific "cold-start strategies" to tackle this problem. For new users, recommend popular items to them until we've gathered enough data about the user to be able to personalize; for new items, recommend them only to frequent users until some point, etc. 
+
+The obvious question is, how to define "new" users/items here? After gathering how many interactions should we consider the user/item to be no longer "new", and switch to personalization? In this tutorial, we will use data analysis to find out the best way to recommend new items (stories). 
+
+
+```{r read, message=FALSE}
+
+# Note for 2021 data (coverage: 2020-05-01 to 2021-01-31): 
+## filter60 means that we filtered out interactions involving
+# children who made fewer than 60 interactions;
+# after filtering, there are 11202 users left.
+
+# read story characteristics
+story_info<- read_csv("Datasets/all_story_obs.csv")
+
+# read utility matrix
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+
+# number of columns in the utility_mat
+num_cols <- 2527
+
+child_ids<-as.integer(utility_mat$child_id_code)
+story_ids<-as.integer(colnames(utility_mat[,3:num_cols]))
+
+# only use stories with features available
+stories_with_features<-(story_ids %in% story_info$story_id_code)
+
+# discard first two columns of utility_mat (which are index and child_id_code)
+utility_matrix<-utility_mat[,3:num_cols]
+
+# only retain stories with features available to us
+utility_matrix<-utility_matrix[,stories_with_features]
+
+# story_ids; this is not sequential and thus different from column index numbers
+story_ids<-colnames(utility_matrix)
+
+# turn utility_matrix into R matrix format
+utility_matrix<-as.matrix(utility_matrix)
+
+rm(utility_mat)  # this variable is no longer needed
+```
+
+The following are the algorithms we’re using, as well as the definition of precision tests: 
+
+```{r algo_cf}
+# return X recommendations based on item-item similarity matrix
+Item_based_top_X_recommendations<-function(uservector, X, similarity_mat){
+  index_known<-which(uservector!=0) #Get the indices of stories known.
+  # get the indexes of stories that the user has not interacted with
+  index_unknown<-uservector==0
+  if(length(index_known)>1){  # sum up the similarity scores for all stories known
+    item_scores<-colSums(similarity_mat[index_known,])
+  }else{
+    item_scores<-(similarity_mat[index_known,])
+  }
+  # from the indexes, get the column labels for the recommended items
+  names_unknown<-story_ids[index_unknown]
+  # sort by the item scores to get the top recommended items
+  index <- which(item_scores[index_unknown] >= sort(item_scores[index_unknown], decreasing=T)[X], arr.ind=TRUE)
+  return(names_unknown[index])
+}
+
+# get the predicted utility scores for stories that the user has interacted with
+All_Item_Scores_IBCF<-function(uservector){
+  index_known<-which(uservector!=0) #Get the indices of stories known.
+  if(length(index_known)>1){  # sum up the similarity scores for all stories known
+    item_scores<-colSums(similarity_matrix[index_known,])
+  }else{
+    item_scores<-(similarity_matrix[index_known,])
+  }
+  return(item_scores)
+}
+```
+
+
+
+```{r algo_con}
+# calculates the content-based recommendations
+Story_char_based_top_X_recommendations<-function(uservector, story_char_mat, X){
+  index_known<-which(uservector!=0) #Get the indices of stories known.
+  index_unknown<-uservector==0
+  if(length(index_known)>1){
+    # sum up the similarity scores for all stories known, then normalize
+    item_scores<-colSums(story_char_mat[index_known,])/ncol(story_char_mat[index_known,])
+  }else{
+    item_scores<-(story_char_mat[index_known,])
+  }
+  # from the indexes, get the column labels for the recommended items
+  names_unknown<-story_ids[index_unknown]
+  
+  # sort by the item scores to get the top recommended items
+  index <- which(item_scores[index_unknown] >= sort(item_scores[index_unknown], decreasing=T)[X], arr.ind=TRUE)
+  return(names_unknown[index])
+}
+
+# calculate the predicted scores for the item pairs
+All_Item_Scores_Story_char_filter<-function(uservector){
+  index_known<-which(uservector!=0) #Get the indices of stories known.
+  if(length(index_known)>1){
+    item_scores<-(colSums(similarity_matrix_story_info[index_known,])/ncol(similarity_matrix_story_info[index_known,]))
+  }else{
+    item_scores<-(similarity_matrix_story_info[index_known,])
+  }
+  return(item_scores)
+}
+
+```
+
+
+
+```{r testdef_cf} 
+#All but K approach and RMSE, testing function:
+test_all_but_k_items<-function(k,ratings_matrix,similarity_mat){
+  precision_vector<-vector()
+  recall_vector<-vector()
+  rmse_vector<-vector()
+  for (userid in 1:nrow(ratings_matrix)){
+    # ratings of a user
+    user=ratings_matrix[userid,]
+    # items that the user has interacted with
+    index_of_known<-which(user!=0 )
+    if(length(index_of_known)>k){
+      # hold out some items
+      takeout<-sample(1:length(index_of_known),size=k)
+      # indexes of stories held out
+      stories_removed<-index_of_known[takeout]
+      # save the utilities of the held-out items
+      save_old<-user[stories_removed]
+      # then set these held-out utilities to be 0
+      user[stories_removed]<-0
+      # restore the user's ratings in the ratings matrix
+      ratings_matrix[userid,]<-user
+      # get recommended items
+      recommended<-Item_based_top_X_recommendations(user, k, similarity_mat)
+      # calculate how many rec'ed items match the held-out items
+      matched=length(intersect(story_ids[stories_removed],recommended))
+      # calculate precision and recall
+      precision_vector<-append(precision_vector,matched/k)
+      recall_vector<-append(recall_vector,(matched/(length(index_of_known))))
+      # restore the held-out items in the ratings matrix (not used for tutorial 05)
+      user[stories_removed]<-save_old
+      ratings_matrix[userid,]<-user
+      # get the predicted utilities to calculate RMSE (not used for tutorial 05)
+      itemscores<-All_Item_Scores_Story_char_filter(ratings_matrix[userid,])
+      rmse<- sqrt(mean((ratings_matrix[userid,]-itemscores)^2))
+      rmse_vector<-append(rmse_vector,rmse)
+    }
+  }
+  return(c("Precision"=mean(precision_vector),"Recall"=mean(recall_vector), "RMSE"=mean(rmse_vector)))
+}
+
+```
+
+
+```{r testdef_con}
+#All but K approach and RMSE, testing function:
+test_all_but_k_storychars<-function(k,ratings_matrix, story_char_mat){
+  precision_vector<-vector()
+  recall_vector<-vector()
+  rmse_vector<-vector()
+  for (userid in 1:nrow(ratings_matrix)){
+    # ratings of a user
+    user=ratings_matrix[userid,]
+    # items that the user has interacted with
+    index_of_known<-which(user!=0)
+    if(length(index_of_known)>k){
+      # hold out some items
+      takeout<-sample(1:length(index_of_known),size=k)
+      # indexes of stories held out
+      stories_removed<-index_of_known[takeout]
+      # save the utilities of the held-out items
+      save_old<-user[stories_removed]
+      # then set these held-out utilities to be 0
+      user[stories_removed]<-0
+      # restore the user's ratings in the ratings matrix
+      ratings_matrix[userid,]<-user
+      # get recommended items
+      recommended<-Story_char_based_top_X_recommendations(user, story_char_mat, k)
+      # calculate how many rec'ed items match the held-out items
+      matched=length(intersect(story_ids[stories_removed],recommended))
+      # calculate precision and recall
+      precision_vector<-append(precision_vector,matched/k)
+      recall_vector<-append(recall_vector,(matched/(length(index_of_known))))
+      # restore the held-out items in the ratings matrix (not used for tutorial 05)
+      user[stories_removed]<-save_old
+      ratings_matrix[userid,]<-user
+      # get the predicted utilities to calculate RMSE (not used for tutorial 05)
+      itemscores<-All_Item_Scores_Story_char_filter(ratings_matrix[userid,])
+      rmse<- sqrt(mean((ratings_matrix[userid,]-itemscores)^2))
+      rmse_vector<-append(rmse_vector,rmse)
+    }
+  }
+  return(c("Precision"=mean(precision_vector),"Recall"=mean(recall_vector), "RMSE"=mean(rmse_vector)))
+}
+```
+
+## When to switch out of the "cold-start strategy"?
+
+For this tutorial, we will use content filtering (which you learned about in Tutorial 03: `S2M_Recsys_basic`) as our cold-start strategy. Recall from that tutorial that available story characteristics include `level, totpage, wordcount, has_geoarea, has_color, has_fruits`, and so on.
+
+Let's do experiments to find out when we should switch from content filtering to collaborative filtering. 
+
+First, the function defined below applies a filter on the columns of a utility matrix, and only keep columns with number of values in the range `(filter_size, filter_size + offset)` values. Remember, the matrix consists mostly of N/A values, and the columns correspond to the stories, so we're filtering out the stories with less than `filter_size` or more than `filter_size + offset` interactions. 
+
+```{r filterer} 
+filterer <- function(mat, filter_size, offset) {
+  cols_ret <- vector()
+  n_rows <- nrow(mat)  # number of rows
+  for (col in 1:ncol(mat)) {  # iterate through the columns
+    n_values <- n_rows - sum(is.na(mat[,col]))  # number of stories read by this user
+    if (filter_size + offset > n_values && n_values >= filter_size) {
+      # if pass the filter criteria, then add this story to the list
+      cols_ret <- append(cols_ret, col)
+    }
+  }
+  return(mat[,cols_ret])
+}
+```
+
+Let's see how many columns (stories) are left in the matrix after applying the filters. 
+
+```{r filter_def}
+offset <- 20
+filter_sizes <- c(0,20,40,60,80)
+
+stories_left <- vector()
+for (filt in filter_sizes) {
+  # constructing matrix
+  filtered<-filterer(utility_matrix, filt, offset)
+  stories_left<-append(stories_left, ncol(filtered))
+}
+avg_n_stories <- sum(stories_left) / length(filter_sizes)
+stories_left
+```
+
+From the output, we can see we get several dozen stories left in each range. For example, for range 0-20, there are 31 stories left; for range 80-100, there are 66 left. 
+
+```{r table, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
+tabl <- "| only keep stories with number of interactions within range | 0-20 | 20-40 | 40-60 | 60-80 | 80-100 |
+|------------|--|--|--|--|--|
+| number of remaining stories after applying the filter | 31 |46 | 54 | 57 | 66 |
+"
+cat(tabl) # output the table in a format good for HTML/PDF/docx conversion
+```
+
+Applying the filters above, the following code gets the `precision@1` scores for content filtering. Using `precision@1` means we will hold out 1 story per user, and try to predict that single held-out story. 
+
+Unlike in previous tutorials, here the number of stories for each filtered dataset changes, so the precision score is unfair—the more the number of stories in the dataset, the harder it is to precisely predict the single held-out story, and the lower precision tends to be. 
+
+To account for the unfairness, the calculated scores are normalized such that, for example, for range 0-20 (31 stories), the scores are made lower, while for range 80-100 (66 stories), the scores are made higher. 
+
+```{r test_con}
+
+precision_con <- vector()
+# rmse_con<-vector()
+for (filt in filter_sizes) {
+  # constructing matrix
+  filtered<-filterer(utility_matrix, filt, offset)
+  filtered[is.na(filtered)]<-0.0
+  story_ids<-colnames(filtered)
+  
+  # get the story characteristics as numeric features
+  story_info%>%filter(story_id_code %in% story_ids)%>%select(one_of("totpage","wordcount",
+            "has_geoarea","has_color","has_fruits",
+            "has_vegetables","has_animals","has_sports",
+            "story_id_code"))->story_numeric
+  story_numeric<-arrange(story_numeric,story_id_code)
+  story_chars_matrix<-as.matrix(story_numeric[,-1]) #Remove the ID variable
+  
+  # calculate the pairwise dot-product of between all pairs of stories
+  sim1<- (story_chars_matrix) %*% t(story_chars_matrix)
+  
+  # this is needed for normalization
+  sim2<- (rowSums(story_chars_matrix)) %*% t(rowSums(story_chars_matrix))
+  
+  # now all entries in the matrix encode similarity between story i and story j
+  similarity_matrix_story_info <- sim1 / sim2
+  
+  # testing
+  ret <- test_all_but_k_storychars(1, filtered, similarity_matrix_story_info)
+  precision_con <- append(precision_con, as.numeric(ret["Precision"]))
+}
+
+# normalization: multiply each score by the number of stories associated with that 
+# filter, then divide by the average number of stories
+precision_con <- precision_con * stories_left / avg_n_stories
+precision_con
+```
+
+
+Get the precision scores for collaborative filtering.
+
+```{r test_cf, warning=FALSE}
+precision_cf <- vector()
+
+# rmse_cf<-vector()
+for (filt in filter_sizes) {
+  # constructing matrix
+  filtered<-filterer(utility_matrix, filt, offset)
+  filtered[is.na(filtered)]<-0.0
+  # calculate the pairwise dot-product of between all pairs of stories
+  sim1<- t(filtered) %*% (filtered)
+  # this is needed for normalization
+  sim2<- (colSums(filtered)) %*% t(colSums(filtered))
+  # now all entries in the matrix encode similarity between story i and story j
+  similarity_matrix <- sim1 / sim2
+  # testing
+  ret <- test_all_but_k_items(1, filtered, similarity_matrix)
+  precision_cf <- append(precision_cf, as.numeric(ret["Precision"]))
+}
+
+# normalization: multiply each score by the number of stories associated with that 
+# filter, then divide by the average number of stories
+precision_cf <- precision_cf * stories_left / avg_n_stories
+precision_cf
+```
+
+For baseline, here we measure the performance of a random recommender.
+
+```{r rand}
+
+#All but K approach and RMSE, testing function:
+test_all_but_k_rand<-function(k,ratings_matrix){
+  precision_vector<-vector()
+  recall_vector<-vector()
+  rmse_vector<-vector()
+  for (userid in 1:nrow(ratings_matrix)){
+    # ratings of a user
+    user=ratings_matrix[userid,]
+    # items that the user has interacted with
+    index_of_known<-which(user!=0 )
+    if(length(index_of_known)>k){
+      # hold out some items
+      takeout<-sample(1:length(index_of_known),size=k)
+      # indexes of stories held out
+      stories_removed<-index_of_known[takeout]
+      # save the utilities of the held-out items
+      save_old<-user[stories_removed]
+      # then set these held-out utilities to be 0
+      user[stories_removed]<-0
+      # restore the user's ratings in the ratings matrix
+      ratings_matrix[userid,]<-user
+      # get random recommended items
+      recommended<-sample(1:ncol(ratings_matrix),size=k)
+      recommended<-story_ids[recommended]
+      # calculate how many rec'ed items match the held-out items
+      matched=length(intersect(story_ids[stories_removed],recommended))
+      # calculate precision and recall
+      precision_vector<-append(precision_vector,matched/k)
+      recall_vector<-append(recall_vector,(matched/(length(index_of_known))))
+      # restore the held-out items in the ratings matrix (not used for tutorial 05)
+      user[stories_removed]<-save_old
+      ratings_matrix[userid,]<-user
+      # get the predicted utilities to calculate RMSE (not used for tutorial 05)
+      itemscores<-All_Item_Scores_Story_char_filter(ratings_matrix[userid,])
+      rmse<- sqrt(mean((ratings_matrix[userid,]-itemscores)^2))
+      rmse_vector<-append(rmse_vector,rmse)
+    }
+  }
+  return(c("Precision"=mean(precision_vector),"Recall"=mean(recall_vector), "RMSE"=mean(rmse_vector)))
+}
+
+precision_rand <- vector()
+for (filt in filter_sizes) {
+  # constructing matrix
+  ret <- test_all_but_k_rand(1, filtered)
+  precision_rand <- append(precision_rand, as.numeric(ret["Precision"]))
+}
+
+# normalization: multiply each score by the number of stories associated with that 
+# filter, then divide by the average number of stories
+precision_rand <- precision_rand * stories_left / avg_n_stories
+precision_rand
+
+```
+
+Plot the results here: 
+
+```{r plt}
+plot(filter_sizes, precision_cf, ylim=c(0, 0.4), type="b", col="blue", lwd=5, pch=15, ylab="Precision", xlab="Filter size for story")
+lines(filter_sizes, precision_con, type="b", col="red", lwd=2, pch=19)
+lines(filter_sizes, precision_rand, type="b", col="green", lwd=2, pch=19)
+legend(0, 0.4, legend=c("Content Filtering", "Collaborative Filtering", "Random Rec's"),
+       col=c("red", "blue", "green"), lty=1:2, cex=0.8)
+```
+
+The x-axis represent the lower bound of the filter size; for example, "0" means we are retaining all stories with number of interactions in the range (0, 20), "20" means range (20, 40), and so on.
+
+For the baseline, random recommender, we expect the precision of random recommendations is about $1/n$, where $n$ is the number of items. Indeed, it achieves ~1/50 (0.02) precision as shown in the green line of the plot. 
+
+From the plot, we can see that the score for content filtering (red) generally falls with larger filters, while the score for collaborative filtering (blue) rises. This makes intuitive sense, since collaborative filtering doesn't work well with stories with few interactions. 
+
+The two lines intersect when the filter size is the range 20-40; this means we should begin to use personalization when an item roughly reaches that many interactions. 
+
+### Exercises
+
+**Here, for the collaborative filtering algorithm, we used the item-item similarity method from Tutorial 02 (`S2M_Recsys_basic`). Try out other methods we've learned and redo the exercise. Are you seeing similar trends for precision for other collaborative filtering algorithms? How does the intersection point change?**
+
+**As to content filtering, one obvious way to improve its performance is to add new story characteristics. What characteristics can you think of that may help to improve the performance? These could be features obtained by combining existing features, or additional ones not present in the given dataset. How would you plan on collecting the data and testing the results?**
+
+
+
