@@ -32,6 +32,7 @@ pacman::p_load(stargazer)
 pacman::p_load(knitr)
 pacman::p_load(doParallel)
 pacman::p_load(corrplot)
+pacman::p_load(viridis)
 
 rm(list = ls())
 
@@ -77,6 +78,7 @@ We'll build an item-based collaborative filtering model as we did in our previou
 
 First, calculate cosine similarity for stories by building the similarity matrix using user activity.
 
+
 ```{r}
 #Ignore NA's for now:
 sim1<- t(utility_matrix) %*% (utility_matrix)
@@ -87,7 +89,8 @@ similarity_matrix <- sim1 / sim2
 Then, let's build our recommender function.
 ```{r}
 Itemitem_top_X_recommendations<-function(story_index,X){
-  sim_vector<-similarity_matrix[-story_index,story_index] #From the similarity matrix, lets get the vector corresponding to 'index of story'. 
+  sim_vector<-similarity_matrix[-story_index, story_index] 
+# From the similarity matrix, lets get the vector corresponding to 'index of story'. 
   index <- which(sim_vector >= sort(sim_vector, decreasing=T)[X], arr.ind=TRUE)
   return(index)
 }
@@ -173,6 +176,54 @@ get_story_details_2(1710)
 
 ## Question
 Plot the popularity of the overall items and the results of the  (top 1, top 5) item-based recommendations for every user, using code from the basic rec sys tutorial that you completed. Is this method recommending more popular items than average?
+```{r diversity_item_based_recs}
+
+# top recommendation
+recommender_results_item_one <- vector()
+for (i in 1:nrow(utility_matrix)) {
+  recommender_results_item_one <- union(
+    recommender_results_item_one,
+    Item_based_top_X_recommendations(utility_matrix[i, ], 1)
+  )
+}
+
+# top 5 recommendations
+recommender_results_item_five <- vector()
+for (i in 1:nrow(utility_matrix)) {
+  recommender_results_item_five <- union(
+    recommender_results_item_five,
+    Item_based_top_X_recommendations(utility_matrix[i, ], 5)
+  )
+}
+
+# First, note how many stories in total are recommended, out of 1087:
+length(recommender_results_item_one)
+length(recommender_results_item_five)
+```
+
+```{r plot_item_based_recs}
+index_results_one <- which(recommender_results_item_one %in% story_ids)
+index_results_five <- which(recommender_results_item_five %in% story_ids)
+
+popularity_ones <- colSums(utility_matrix[, index_results_one]>0.3)
+popularity_fives <- colSums(utility_matrix[, index_results_five]>0.3)
+
+readers_per_story <- (colSums(utility_matrix>0.3))
+
+# Create a data frame of recommendations
+df1 <- data.frame(x = readers_per_story, label = rep("Overall", length(readers_per_story)))
+df2 <- data.frame(x = popularity_fives, label = rep("Five_Recs", length(popularity_fives)))
+df3 <- data.frame(x = popularity_ones, label = rep("One_Rec", length(popularity_ones)))
+df <- rbind(df1, df2, df3)
+
+# Plot the number of readers per story
+ggplot(df, aes(x, y = ..count.., fill = label)) +
+  geom_density(color = "black", alpha = 0.5) +
+  xlab("Number of readers") +
+  ylab("Density") + 
+  xlim(0, 1000)
+
+```
 
 # User Similarity Based Recommendations:
 
@@ -222,6 +273,7 @@ recs<-User_top_X_recommendations(100,5,utility_matrix,similarity_matrix_user)
 print(recs)
 
 #Lets compare story `user_interacted` which is something they've read, vs our top user based recommendation""
+user_interacted<-names(utility_matrix[100,utility_matrix[100,]>0])
 get_story_details_2(user_interacted[1])
 get_story_details_2(recs[1])
 
@@ -230,6 +282,63 @@ get_story_details_2(recs[1])
 
 ## Question
 Plot the popularity of the overall items and the results of the  (top 1, top 5) user-based recommendations for every user. Is this method recommending more popular items than average?
+
+```#{r  diversity_user_based_recs}
+
+# Note: This might take a while to run
+recommender_results_item_one <- vector()
+recommender_results_item_five <- vector()
+
+# Set up parallel processing
+all_cores <- min(parallel::detectCores(logical = FALSE), 2)
+doFuture::registerDoFuture()
+cl <- parallel::makeCluster(all_cores)
+future::plan("cluster", workers = cl)
+
+# Export objects to the parallel sessions
+parallel::clusterExport(cl, c("utility_matrix", "User_top_X_recommendations", "story_ids", "child_ids", "similarity_matrix_user"))
+
+recommender_results_item_one <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
+  return(User_top_X_recommendations(i, 1, utility_matrix, similarity_matrix_user))
+}
+
+recommender_results_item_five <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
+  return(User_top_X_recommendations(i, 5, utility_matrix, similarity_matrix_user))
+}
+
+parallel::stopCluster(cl)
+
+recommender_results_item_one <- unique(recommender_results_item_one)
+recommender_results_item_five <- unique(recommender_results_item_five)
+
+# First, note how many stories in total are recommended, out of 1087:
+length(recommender_results_item_one)
+length(recommender_results_item_five)
+```
+
+```#{r plot_user_based_recs}
+index_results_one <- which(recommender_results_item_one %in% story_ids)
+index_results_five <- which(recommender_results_item_five %in% story_ids)
+
+popularity_ones <- colSums(utility_matrix[, index_results_one]>0.3)
+popularity_fives <- colSums(utility_matrix[, index_results_five]>0.3)
+
+readers_per_story <- (colSums(utility_matrix>0.3))
+
+# Create a data frame of recommendations
+df1 <- data.frame(x = readers_per_story, label = rep("Overall", length(readers_per_story)))
+df2 <- data.frame(x = popularity_fives, label = rep("Five_Recs", length(popularity_fives)))
+df3 <- data.frame(x = popularity_ones, label = rep("One_Rec", length(popularity_ones)))
+df <- rbind(df1, df2, df3)
+
+# Plot the number of readers per story
+ggplot(df, aes(x, y = ..count.., fill = label)) +
+  geom_density(color = "black", alpha = 0.5) +
+  xlab("Number of readers") +
+  ylab("Density") + 
+  xlim(0, 1000)
+
+```
 
 # Content Based Filtering
 
@@ -336,7 +445,7 @@ test_all_but_k_items(10,utility_matrix)
 
 ```
 
-```{r, eval=FALSE}
+```#{r, eval=FALSE}
 #This is not run by default,
 #because it takes a long time.
 #Delete "eval=FALSE" in rmarkdown
@@ -486,9 +595,9 @@ How do we choose how many dimensions to use? It's a good idea to do cross-valida
 #and run it yourself.
 
 # Parallelize computing to make things faster
-cluster <- makeCluster(min(detectCores(logical = TRUE) - 1,8)) 
+cluster <- parallel::makeCluster(min(parallel::detectCores(logical = TRUE) - 1, 8)) 
 registerDoParallel(cluster)
-clusterEvalQ(cluster, {})
+parallel::clusterEvalQ(cluster, {})
 
 folds <- 5
 splitfolds <- sample(1:folds, nrow(utility_matrix), replace = TRUE)
@@ -496,7 +605,7 @@ candidate_d <- c(2,4,6,8,10,12,14,16,18,20) #Candidate dimensions
 k<-5 #We will use precision at 5
 
 # Export objects to the parallel sessions
-clusterExport(cluster, c("utility_matrix", "splitfolds", "folds", "candidate_d","SVD_top_X_recommendations","k","story_ids"))
+parallel::clusterExport(cluster, c("utility_matrix", "splitfolds", "folds", "candidate_d","SVD_top_X_recommendations","k","story_ids"))
 
 system.time({
 results <- foreach(j = 1:length(candidate_d), .combine = rbind) %dopar%{
@@ -542,7 +651,7 @@ results <- foreach(j = 1:length(candidate_d), .combine = rbind) %dopar%{
    return(results_cv)
 }
 })
-stopCluster(cluster)
+parallel::stopCluster(cluster)
 
 
 ggplot(data=data.frame(results),aes(x=d,y=rmse))+
