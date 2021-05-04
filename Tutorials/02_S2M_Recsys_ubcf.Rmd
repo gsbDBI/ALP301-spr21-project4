@@ -308,9 +308,10 @@ test_all_but_k_users<-function(k,ratings_matrix){
       stories_removed<-index_of_known[takeout]
       save_old<-user[stories_removed]
       ratings_matrix[userid,stories_removed]<-0
-      sim1<- (ratings_matrix) %*% t(ratings_matrix)
-      sim2<- (rowSums(ratings_matrix)) %*% t(rowSums(ratings_matrix))
-      sim_matrix_user <- sim1 / sim2
+      # sim1<- (ratings_matrix) %*% t(ratings_matrix)
+      # sim2<- (rowSums(ratings_matrix)) %*% t(rowSums(ratings_matrix))
+      # sim_matrix_user <- sim1 / sim2
+      sim_matrix_user <- (ratings_matrix) %*% t(ratings_matrix) / (rowSums(ratings_matrix)) %*% t(rowSums(ratings_matrix))
       sim_matrix_user[is.nan(sim_matrix_user)]<-0
       recommended<-User_top_X_recommendations(userid,k,ratings_matrix,sim_matrix_user)
       matched=length(intersect(story_ids[stories_removed],recommended))

@@ -71,6 +71,27 @@ Binary variables indicating whether the story text includes any words related to
 `geoarea,color,fruits,vegetables,animals,sports`:
 If the story contains references to any of the above, these are the extracted matches from the story text for words in these categories.
 
+Let's make recommendations to someone who read story 100. First, let's have a look at what they read so far by examining the story characteristics.
+
+```{r}
+#From index in the matrix
+get_story_details<-function(story_index){
+  story_id<-story_ids[story_index]
+  story_info%>%filter(story_id_code==story_id)->story_characteristics
+  return(story_characteristics)
+}
+
+#From 'story text file' id
+get_story_details_2<-function(story_name){
+  story_info%>%filter(story_id_code==story_name)->story_characteristics
+  return(story_characteristics)
+}
+
+story_characteristics<-get_story_details(100)
+
+story_characteristics
+```
+
 # Matrix Factorization and Dimensionality Reduction
 
 Let's create a lower dimensional representation of our utility matrix.
@@ -111,6 +132,8 @@ Let us make recommendations to user 100 again and compare against a story they'v
 toprec<-SVD_top_X_recommendations(U,Vprime,100,1,utility_matrix)
 
 #Lets compare the content of story `user_interacted` which is something they've read, against our top SVD recommendation
+#What does user 100 read?
+user_interacted<-names(utility_matrix[100,utility_matrix[100,]>0])
 get_story_details_2(user_interacted[1])
 get_story_details_2(as.numeric(toprec))
 
@@ -121,7 +144,7 @@ get_story_details_2(as.numeric(toprec))
 
 How do we choose how many dimensions to use? It's a good idea to do cross-validation, using precision at K as our metric.
 
-```{r, eval=FALSE}
+```{r, eval=True}
 #This is not run by default,
 #because it takes a long time.
 #Delete "eval=FALSE" in rmarkdown
@@ -186,13 +209,28 @@ results <- foreach(j = 1:length(candidate_d), .combine = rbind) %dopar%{
 })
 parallel::stopCluster(cluster)
 
+```
+
+```{r}
+
+data.frame(results)
 
 ggplot(data=data.frame(results),aes(x=d,y=rmse))+
   geom_line()+
   xlab("Number of dimensions in SVD")+
   ylab("RMSE")
-```
 
+ggplot(data=data.frame(results),aes(x=d,y=precision.at.5))+
+  geom_line()+
+  xlab("Number of dimensions in SVD")+
+  ylab("Precision at 5")
+
+ggplot(data=data.frame(results),aes(x=d,y=recall.at.5))+
+  geom_line()+
+  xlab("Number of dimensions in SVD")+
+  ylab("Recall at 5")
+  
+```
 ## Questions 
 
 How many dimensions would you prefer to use in the SVD method?
