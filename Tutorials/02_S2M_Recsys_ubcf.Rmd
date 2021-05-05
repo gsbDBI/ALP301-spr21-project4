@@ -154,7 +154,7 @@ get_story_details_2(recs[1])
 ## Question
 Plot the popularity of the overall items and the results of the  (top 1, top 5) user-based recommendations for every user. Is this method recommending more popular items than average?
 
-```{r diversity_user_based_recs_parallel, eval = False}
+```{r diversity_user_based_recs_parallel, eval = FALSE}
 
 # Note: This might take a while to run
 recommender_results_item_one <- vector()
@@ -187,7 +187,7 @@ length(recommender_results_item_one)
 length(recommender_results_item_five)
 ```
 
-```{r diversity_user_based_recs_sequentiall}
+```{r diversity_user_based_recs_sequentiall, eval=FALSE}
 
 # recommender_results_item_one <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
 #   return(User_top_X_recommendations(i, 1, utility_matrix, similarity_matrix_user))
@@ -205,7 +205,7 @@ recommender_results_item_five <- foreach(i = 1:10, .combine = append) %dopar% {
 length(recommender_results_item_five)
 ```
 
-```{r, eval=False}
+```{r, eval=FALSE}
 
 Recommender_Results_Data_Frame<-function(user_index, X, ratings_matrix,similarity_matrix_user){
   ranked_items <- User_top_X_recommendations(user_index, X, ratings_matrix, similarity_matrix_user)
@@ -218,7 +218,7 @@ Recommender_Results_Data_Frame<-function(user_index, X, ratings_matrix,similarit
 # recommender_results_item <- Recommender_Results_Data_Frame(1, 10, utility_matrix, similarity_matrix_user)
 # next_user = 2
 
-recommender_results_item <- tibble(read_csv("Datasets/rec_results_ubcf.csv"),col_types = cols(.default = col_double()))
+recommender_results_item <- tibble(read_csv("Results/rec_results_ubcf.csv"),col_types = cols(.default = col_double()))
 next_user = recommender_results_item$user_index[nrow(recommender_results_item)] + 1
 cat("Next user: ", next_user)
 
@@ -230,17 +230,17 @@ for (i in next_user:nrow(utility_matrix)) {
 }
   
 
-write.csv(recommender_results_item, "Datasets/rec_results_ubcf.csv", row.names = FALSE)
+write.csv(recommender_results_item, "Results/rec_results_ubcf.csv", row.names = FALSE)
 ```
 
-```{r}
-recommender_results_item <- tibble(read_csv("Datasets/rec_results_ubcf.csv"))
+```{r, eval=FALSE}
+recommender_results_item <- tibble(read_csv("Results/rec_results_ubcf.csv"))
 
 recommender_results_item_one <- unique(filter(recommender_results_item, item_rank <= 1)$story_id)
 recommender_results_item_five <- unique(filter(recommender_results_item, item_rank <= 5)$story_id)
 ```
 
-```{r plot_user_based_recs}
+```{r plot_user_based_recs, eval=FALSE}
 index_results_one <- which(recommender_results_item_one %in% story_ids)
 index_results_five <- which(recommender_results_item_five %in% story_ids)
 
