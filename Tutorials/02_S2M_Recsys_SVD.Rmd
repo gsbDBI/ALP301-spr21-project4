@@ -139,6 +139,12 @@ get_story_details_2(as.numeric(toprec))
 
 ```
 
+```{r, eval=FALSE}
+source("Utils/save_recomendation_results.R", local = knitr::knit_global())
+recommender_fun_args <- list(U=U,Vprime=Vprime,X=10, ratings_matrix=utility_matrix)
+Save_Recommender_Results(SVD_top_X_recommendations, recommender_fun_args, "rec_results_svc.csv", full=TRUE)
+```
+
 ## Cross Validation for SVD
 
 
@@ -158,7 +164,7 @@ parallel::clusterEvalQ(cluster, {})
 folds <- 5
 splitfolds <- sample(1:folds, nrow(utility_matrix), replace = TRUE)
 candidate_d <- c(2,4,6,8,10,12,14,16,18,20) #Candidate dimensions
-k<-5 #We will use precision at 5
+k<-5 # We will use precision at 5
 
 # Export objects to the parallel sessions
 parallel::clusterExport(cluster, c("utility_matrix", "splitfolds", "folds", "candidate_d","SVD_top_X_recommendations","k","story_ids"))
