@@ -5,7 +5,8 @@
 
 run_source_svd <- FALSE
 
-svd_get_decomposition<-function (utility_matrix, d) {
+svd_get_decomposition<-function (utility_matrix, params) {
+  d<-params$d
   U<-svd(utility_matrix,nu=d,nv=d)$u
   Vprime<-svd(utility_matrix,nu=d,nv=d)$v
   list(U=U, Vprime=Vprime)
