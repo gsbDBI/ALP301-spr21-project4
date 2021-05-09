@@ -14,6 +14,6 @@ initialize_utility_matrix<-function(utility_mat, story_info, num_cols=2527) {
   story_ids<-colnames(utility_matrix)
   utility_matrix<-as.matrix(utility_matrix)
   
-  c("utility_matrix"=utility_matrix, "child_ids"=child_ids, "story_ids"=story_ids)
+  list("utility_matrix"=utility_matrix, "child_ids"=child_ids, "story_ids"=story_ids)
 }
 

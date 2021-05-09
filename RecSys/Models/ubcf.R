@@ -1,4 +1,4 @@
-# Title     : User-Based Collaborative Filtering (UBCF) helper functons
+# Title     : User-Based Collaborative Filtering (UBCF) helper functions
 # Objective : Logic of UBCF recommendation system
 # Created by: juan
 # Created on: 5/8/21

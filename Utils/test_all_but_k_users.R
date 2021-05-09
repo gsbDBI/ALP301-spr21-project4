@@ -3,8 +3,8 @@
 # Created by: juan
 # Created on: 5/8/21
 
-if (!exists(run_get_item_scores)) run_get_item_scores <- FALSE
-if (!exists(run_get_top_x_recommendations)) run_get_top_x_recommendations <- FALSE
+if (!exists("run_get_item_scores")) run_get_item_scores <- FALSE
+if (!exists("run_get_top_x_recommendations")) run_get_top_x_recommendations <- FALSE
 
 test_all_but_k_users<-function(k, ratings_matrix, type, d=5){
   if (run_get_item_scores) source("../RecSys/get_item_scores.R", local = knitr::knit_global())

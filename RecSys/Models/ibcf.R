@@ -1,4 +1,4 @@
-# Title     : Item-Based Collaborative Filtering (IBCF) helper functons
+# Title     : Item-Based Collaborative Filtering (IBCF) helper functions
 # Objective : Logic of IBCF recommendation system
 # Created by: juan
 # Created on: 5/8/21
