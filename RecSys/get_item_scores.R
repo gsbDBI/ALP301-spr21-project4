@@ -11,7 +11,7 @@ if (!exists(run_source_svd)) run_source_svd <- TRUE
 
 get_item_scores_generator<-function(utility_matrix, type, d=5) {
   if(type == 'ubcf') {
-    if(run_source_ubcf) source("/Types/ubcf.R", local = knitr::knit_global())
+    if(run_source_ubcf) source("/Models/ubcf.R", local = knitr::knit_global())
     similarity_matrix_user <- ubcf_get_similarity_matrix(utility_matrix)
     return(
       function(userid, ratings_matrix){
@@ -19,7 +19,7 @@ get_item_scores_generator<-function(utility_matrix, type, d=5) {
       }
     )
   } else if(type == 'ibcf') {
-    if(run_source_svd) source("/Types/ibcf.R", local = knitr::knit_global())
+    if(run_source_svd) source("/Models/ibcf.R", local = knitr::knit_global())
     similarity_matrix_item <- ubcf_get_similarity_matrix(utility_matrix)
     return(
       function(userid, ratings_matrix){
@@ -27,7 +27,7 @@ get_item_scores_generator<-function(utility_matrix, type, d=5) {
       }
     )
   } else if(type == 'svd') {
-    if(run_source_svd) source("/Types/svd.R", local = knitr::knit_global())
+    if(run_source_svd) source("/Models/svd.R", local = knitr::knit_global())
     factors <- svd_get_decomposition(utility_matrix, d)
     return(
       function(userid, ratings_matrix){
