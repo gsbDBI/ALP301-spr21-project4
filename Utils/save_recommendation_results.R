@@ -16,7 +16,7 @@ Save_Recommender_Results<-function(recommender_fun, recommender_fun_args, filena
     recommender_results_item <- Recommender_Results_Data_Frame(recommender_fun, recommender_fun_args)
     next_user = 2
   } else {
-    recommender_results_item <- tibble(read_csv(paste("Results/",filename, sep = ""),col_types = cols(.default = col_double())))
+    recommender_results_item <- tibble(read_csv(paste("/cloud/project/Results/",filename, sep = ""),col_types = cols(.default = col_double())))
     next_user = recommender_results_item$user_index[nrow(recommender_results_item)] + 1
   }
   ratings_matrix <- recommender_fun_args$ratings_matrix
