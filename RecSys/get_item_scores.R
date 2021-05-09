@@ -8,10 +8,12 @@ run_get_item_scores <- FALSE
 if (!exists("run_source_ubcf")) run_source_ubcf <- TRUE
 if (!exists("run_source_ibcf")) run_source_ibcf <- TRUE
 if (!exists("run_source_svd")) run_source_svd <- TRUE
+if (!exists("run_source_cbf")) run_source_svd <- TRUE
 
-get_item_scores_generator<-function(utility_matrix, type, d=5) {
+path = "/cloud/project/RecSys"
+get_item_scores_generator<-function(utility_matrix, type, params=list()) {
   if(type == 'ubcf') {
-    if(run_source_ubcf) source("../RecSys/Models/ubcf.R", local = knitr::knit_global())
+    if(run_source_ubcf) source(paste(path, "/Models/ubcf.R", sep=""), local = knitr::knit_global())
     similarity_matrix_user <- ubcf_get_similarity_matrix(utility_matrix)
     return(
       function(userid, ratings_matrix){
@@ -19,7 +21,7 @@ get_item_scores_generator<-function(utility_matrix, type, d=5) {
       }
     )
   } else if(type == 'ibcf') {
-    if(run_source_svd) source("../RecSys/Models/ibcf.R", local = knitr::knit_global())
+    if(run_source_svd) source(paste(path, "/Models/ibcf.R", sep=""), local = knitr::knit_global())
     similarity_matrix_item <- ibcf_get_similarity_matrix(utility_matrix)
     return(
       function(userid, ratings_matrix){
@@ -27,11 +29,19 @@ get_item_scores_generator<-function(utility_matrix, type, d=5) {
       }
     )
   } else if(type == 'svd') {
-    if(run_source_svd) source("../RecSys/Models/svd.R", local = knitr::knit_global())
-    factors <- svd_get_decomposition(utility_matrix, d)
+    if(run_source_svd) source(paste(path, "/Models/svd.R", sep=""), local = knitr::knit_global())
+    factors <- svd_get_decomposition(utility_matrix, params)
     return(
       function(userid, ratings_matrix){
         svd_get_item_scores(userid, factors$U, factors$Vprime)
+      }
+    )
+  } else if(type == 'cbf') {
+    if(run_source_svd) source(paste(path, "/Models/cbf.R", sep=""), local = knitr::knit_global())
+    similarity_matrix_story <- cbf_get_similarity_matrix(utility_matrix, params)
+    return(
+      function(userid, ratings_matrix){
+        cbf_get_item_scores(userid, ratings_matrix, similarity_matrix_story)
       }
     )
   } else {
