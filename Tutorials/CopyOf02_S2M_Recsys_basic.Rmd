@@ -299,6 +299,22 @@ How do we choose how many dimensions to use? It's a good idea to do cross-valida
 #Delete "eval=FALSE" in rmarkdown
 #and run it yourself.
 
+SVD_top_X_recommendations<-function(U,Vprime,userid,X,ratings_matrix){
+  user_vector<-U[userid,]
+  scores<-U[userid,]%*%t(Vprime)
+  user_row<-ratings_matrix[userid,]
+  unknown_stories<-user_row==0
+  names_unknown<-story_ids[unknown_stories]
+  index <- which(scores[as.logical(unknown_stories)] >= sort(scores[as.logical(unknown_stories)], decreasing=T)[X], arr.ind=TRUE)
+  return(names_unknown[index])
+}
+
+SVD_item_scores<-function(U,Vprime,userid){
+  user_vector<-U[userid,]
+  scores<-U[userid,]%*%t(Vprime)
+  return(scores)
+}
+
 # Parallelize computing to make things faster
 cluster <- makeCluster(min(detectCores(logical = TRUE) - 1,8)) 
 registerDoParallel(cluster)
