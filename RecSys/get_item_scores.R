@@ -21,7 +21,7 @@ get_item_scores_generator<-function(utility_matrix, type, params=list()) {
       }
     )
   } else if(type == 'ibcf') {
-    if(run_source_svd) source(paste(path, "/Models/ibcf.R", sep=""), local = knitr::knit_global())
+    if(run_source_ibcf) source(paste(path, "/Models/ibcf.R", sep=""), local = knitr::knit_global())
     similarity_matrix_item <- ibcf_get_similarity_matrix(utility_matrix)
     return(
       function(userid, ratings_matrix){
@@ -37,7 +37,7 @@ get_item_scores_generator<-function(utility_matrix, type, params=list()) {
       }
     )
   } else if(type == 'cbf') {
-    if(run_source_svd) source(paste(path, "/Models/cbf.R", sep=""), local = knitr::knit_global())
+    if(run_source_cbf) source(paste(path, "/Models/cbf.R", sep=""), local = knitr::knit_global())
     similarity_matrix_story <- cbf_get_similarity_matrix(utility_matrix, params)
     return(
       function(userid, ratings_matrix){
