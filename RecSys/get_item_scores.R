@@ -8,7 +8,7 @@ run_get_item_scores <- FALSE
 if (!exists("run_source_ubcf")) run_source_ubcf <- TRUE
 if (!exists("run_source_ibcf")) run_source_ibcf <- TRUE
 if (!exists("run_source_svd")) run_source_svd <- TRUE
-if (!exists("run_source_cbf")) run_source_svd <- TRUE
+if (!exists("run_source_cbf")) run_source_cbf <- TRUE
 
 path = "/cloud/project/RecSys"
 get_item_scores_generator<-function(utility_matrix, type, params=list()) {
