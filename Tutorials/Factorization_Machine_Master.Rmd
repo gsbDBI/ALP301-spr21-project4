@@ -1,0 +1,131 @@
+---
+title: 'Factorization Machine Code'
+output:
+  html_document:
+    highlight: haddock
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+date: "April 2021"
+---
+
+```{r setup, include=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse)
+pacman::p_load(here)
+pacman::p_load(lmtest)
+pacman::p_load(glue)
+pacman::p_load(broom)
+pacman::p_load(ri2)
+pacman::p_load(margins)
+pacman::p_load(glmnet) 
+pacman::p_load(kableExtra)
+pacman::p_load(stargazer)
+pacman::p_load(knitr)
+pacman::p_load(doParallel)
+pacman::p_load(corrplot)
+pacman::p_load(corrplot)
+pacman::p_load(rsparse)
+pacman::p_load(recommenderlab)
+pacman::p_load(reshape2)
+pacman::p_load(ggplot2)
+
+rm(list = ls())
+
+# Note for 2021 data (coverage: 2020-05-01 to 2021-01-31): 
+## filter60 means that we filtered out interactions involving
+# children who made fewer than 60 interactions;
+# after filtering, there are 11202 users left.
+# This applies to both utils_mat_filtered.csv and utils_raw_filter60.csv.
+
+utils_mat_file <- "Datasets/utils_mat_filtered.csv"
+utils_raw_file <- "Datasets/utils_raw_filter60.csv"
+
+# read story/user characteristics
+story_info<- read_csv("Datasets/all_story_obs.csv")
+user_info <- read_csv("Datasets/user_interests.csv")
+user_info$grade<-as.integer(str_extract(user_info$grade,"[1-9]"))
+
+# read utility matrix
+utility_mat<- read_csv(utils_mat_file,col_types = cols(.default = col_double()))
+utility_mat[is.na(utility_mat)]<-0.0
+
+# read child-story interaction data
+utility_data_raw<-read_csv(utils_raw_file,col_types = cols(.default = col_double()))
+
+```
+
+Data Processing - this is the lever on how we will define the factorization machine
+
+```{r info}
+
+# filter out N/A entries
+utility_data_raw%>% filter(!is.na(intensity))->utility_data_raw
+
+# select story characteristics to be used
+story_info %>% select(one_of(c("totpage","wordcount","story_id_code" ,"n_people")))-> story_info_cut
+
+# select user characteristics to be used
+user_info %>% select(one_of(c("i_Life_skills","grade", "user_id")))-> user_info_cut
+
+
+# combine story characteristics into the utility data
+left_join(utility_data_raw, story_info_cut, by = c("story_id_code"="story_id_code")) %>% drop_na-> merged_data_all
+
+# combine user characteristics into the utility data
+left_join(merged_data_all, user_info_cut, by = c("child_id_code"="user_id")) %>% drop_na-> merged_data_all_user
+
+# user_info[user_info$user_id == 547,]
+# merged_data_all_user[merged_data_all_user$child_id_code == 71,]
+
+# split train/test data
+train_index<-sample(nrow(merged_data_all_user), floor(0.7*nrow(merged_data_all_user)))
+train_set<-merged_data_all_user[train_index,]
+test_set<-merged_data_all_user[-train_index,]
+```
+
+```{r model}
+
+formula_fm<- intensity ~ totpage+wordcount+story_id_code+child_id_code+grade+n_people+i_Life_skills
+train_matrix<-model.matrix(formula_fm, data = train_set)
+train_matrix_sparse = as(train_matrix, "RsparseMatrix")
+
+# If binary
+train_outcome <-ifelse(train_set$intensity>0.4,1,0)
+# If Gaussian
+# train_outcome <-train_set$intensity
+```
+
+```{r run_model}
+# create factorization machine model and train it - binomial
+
+fm = FactorizationMachine$new(learning_rate_w = 0.03, rank = 50, lambda_w = 0.001,
+lambda_v = 0.001, family = "binomial", intercept = FALSE)
+
+# # create factorization machine model and train it - gaussian
+# 
+# fm = FactorizationMachine$new(learning_rate_w = 0.03, rank = 50, lambda_w = 0.001,
+# lambda_v = 0.001, family = "gaussian", intercept = FALSE) 
+# 
+# Note this was originally 200
+system.time({
+  res = fm$fit(train_matrix_sparse, train_outcome, n_iter = 50)
+  })
+
+
+# If you run the model with the usual (0-0.3-0.5-1) encoding,
+#truncate the predictions of the model
+#so that anything below 0 is truncated to 0,
+#and anything above 1 is truncated to 1.
+preds = fm$predict(train_matrix)
+sqrt(mean((train_outcome-preds)^2))
+```
+```
