@@ -1,0 +1,291 @@
+---
+title: 'Alp 301: Stones2Milestones, Recommendation Systems 1'
+output:
+  html_document:
+    highlight: haddock
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+date: "April 2021"
+---
+
+```{r, message = FALSE, warning = FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse)
+pacman::p_load(here)
+pacman::p_load(lmtest)
+pacman::p_load(glue)
+pacman::p_load(broom)
+pacman::p_load(ri2)
+pacman::p_load(margins)
+pacman::p_load(glmnet) 
+pacman::p_load(kableExtra)
+pacman::p_load(stargazer)
+pacman::p_load(knitr)
+pacman::p_load(doParallel)
+pacman::p_load(corrplot)
+
+rm(list = ls())
+
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+# set.seed(1992)
+# rows<-sample(1:nrow(utility_mat),size=5000)
+# utility_mat <- utility_mat[rows, ]
+
+source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
+initialization <- initialize_utility_matrix(utility_mat, story_info)
+
+utility_matrix <- initialization$utility_matrix
+story_ids <- initialization$story_ids
+child_ids <- initialization$child_ids
+
+rm(utility_mat)  # this variable is no longer needed
+rm(initialization)
+```
+
+```{r alternative}
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+source("../Utils/save_recommendation_results.R", local = knitr::knit_global())
+source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
+source("../Utils/test_all_but_k.R", local = knitr::knit_global())
+```
+
+# Story similarity based recommendations
+
+```{r get_results_ibcf, eval=FALSE}
+All_Item_Scores_IBCF<-get_item_scores_generator(utility_matrix, "ibcf")
+Item_based_top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, All_Item_Scores_IBCF)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
+filename = "rec_results_ibcf.csv"
+save_recommender_results(Item_based_top_X_recommendations, recommender_fun_args, filename)
+
+rm(All_Item_Scores_IBCF)
+rm(Item_based_top_X_recommendations)
+```
+
+```{r}
+plot_diversity_recsys("rec_results_ibcf.csv")
+```
+```{r}
+test_all_but_k(1,utility_matrix, "ibcf")
+test_all_but_k(5,utility_matrix, "ibcf")
+test_all_but_k(10,utility_matrix, "ibcf")
+```
+
+## Question
+Plot the popularity of the overall items and the results of the  (top 1, top 5) item-based recommendations for every user, using code from the basic rec sys tutorial that you completed. Is this method recommending more popular items than average?
+
+# User Similarity Based Recommendations:
+
+```{r get_results_ubcf, eval=FALSE}
+All_Item_Scores_UBCF<-get_item_scores_generator(utility_matrix, "ubcf")
+User_top_X_recommendations<-function(userid, X, utility_matrix){
+  get_top_x_recommendations(userid, X, utility_matrix, All_Item_Scores_UBCF)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
+filename = "rec_results_ubcf.csv"
+save_recommender_results(Item_based_top_X_recommendations, recommender_fun_args, filename)
+
+rm(All_Item_Scores_UBCF)
+rm(User_top_X_recommendations)
+```
+
+```{r}
+plot_diversity_recsys("rec_results_ubcf.csv")
+```
+
+```{r}
+test_all_but_k(1,utility_matrix, "ubcf")
+test_all_but_k(5,utility_matrix, "ubcf")
+test_all_but_k(10,utility_matrix, "ubcf")
+```
+
+
+## Question
+Plot the popularity of the overall items and the results of the  (top 1, top 5) user-based recommendations for every user. Is this method recommending more popular items than average?
+
+# Content Based Filtering
+
+
+```{r get_results_cbf, eval=FALSE}
+params<-list(story_info=story_info, story_ids=story_ids)
+All_Item_Scores_Story_char_filter<-get_item_scores_generator(utility_matrix, "cbf", params)
+rm(params)
+Story_char_based_top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, All_Item_Scores_Story_char_filter)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
+filename = "rec_results_cbf.csv"
+save_recommender_results(Story_char_based_top_X_recommendations, recommender_fun_args, filename)
+
+rm(All_Item_Scores_Story_char_filter)
+rm(Story_char_based_top_X_recommendations)
+```
+
+```{r}
+plot_diversity_recsys("rec_results_cbf.csv")
+```
+
+```{r}
+params<-list(story_info=story_info, story_ids=story_ids)
+test_all_but_k(1,utility_matrix, "cbf", params)
+test_all_but_k(5,utility_matrix, "cbf", params)
+test_all_but_k(10,utility_matrix, "cbf", params)
+```
+
+# Matrix Factorization and Dimensionality Reduction
+
+Let's create a lower dimensional representation of our utility matrix.
+
+```{r, eval=FALSE}
+#Top recommendations based on low dimensional representation:
+
+params<-list(d=20)
+SVD_item_scores<-get_item_scores_generator(utility_matrix, "svd", params)
+rm(params)
+SVD_top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, SVD_item_scores)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
+filename = "rec_results_svd.csv"
+save_recommender_results(SVD_top_X_recommendations, recommender_fun_args, filename)
+
+rm(SVD_item_scores)
+rm(SVD_top_X_recommendations)
+```
+
+```{r}
+plot_diversity_recsys("rec_results_svd.csv")
+```
+
+Let us make recommendations to user 100 again and compare against a story they've read.
+
+```{r}
+
+params<-list(d=20)
+test_all_but_k(1,utility_matrix, "svd", params)
+test_all_but_k(5,utility_matrix, "svd", params)
+test_all_but_k(10,utility_matrix, "svd", params)
+
+```
+
+## Cross Validation for SVD
+
+
+How do we choose how many dimensions to use? It's a good idea to do cross-validation, using precision at K as our metric.
+
+```{r, eval=FALSE}
+#This is not run by default,
+#because it takes a long time.
+#Delete "eval=FALSE" in rmarkdown
+#and run it yourself.
+
+SVD_top_X_recommendations<-function(U,Vprime,userid,X,ratings_matrix){
+  user_vector<-U[userid,]
+  scores<-U[userid,]%*%t(Vprime)
+  user_row<-ratings_matrix[userid,]
+  unknown_stories<-user_row==0
+  names_unknown<-story_ids[unknown_stories]
+  index <- which(scores[as.logical(unknown_stories)] >= sort(scores[as.logical(unknown_stories)], decreasing=T)[X], arr.ind=TRUE)
+  return(names_unknown[index])
+}
+
+SVD_item_scores<-function(U,Vprime,userid){
+  user_vector<-U[userid,]
+  scores<-U[userid,]%*%t(Vprime)
+  return(scores)
+}
+
+# Parallelize computing to make things faster
+cluster <- makeCluster(min(detectCores(logical = TRUE) - 1,8)) 
+registerDoParallel(cluster)
+clusterEvalQ(cluster, {})
+
+folds <- 5
+splitfolds <- sample(1:folds, nrow(utility_matrix), replace = TRUE)
+candidate_d <- c(2,4,6,8,10,12,14,16,18,20) #Candidate dimensions
+k<-5 #We will use precision at 5
+
+# Export objects to the parallel sessions
+clusterExport(cluster, c("utility_matrix", "splitfolds", "folds", "candidate_d","SVD_top_X_recommendations","k","story_ids"))
+
+system.time({
+results <- foreach(j = 1:length(candidate_d), .combine = rbind) %dopar%{
+   d<-candidate_d[j]
+   results_cv <- matrix(0, nrow = 1, ncol = 4)
+   colnames(results_cv) <- c("d","precision at 5","recall at 5","rmse")
+   mean_precision_vec<-rep(0,folds)
+   mean_recall_vec<-rep(0,folds)
+   mean_rmse_vec<-rep(0,folds)
+   for(i in 1:folds){
+      train_set <- utility_matrix[splitfolds != i , ]
+      valid_set <- utility_matrix[splitfolds == i, ]
+      Vprime<-svd(train_set,nu=d,nv=d)$v
+      precision_vector<-rep(0,nrow(valid_set))
+      recall_vector<-rep(0,nrow(valid_set))
+      rmse_vector<-rep(0,nrow(valid_set))
+      for (userid in 1:nrow(valid_set)){
+        user=valid_set[userid,]
+        index_of_known<-which(user!=0)
+        if(length(index_of_known)>k){
+          takeout<-sample(1:length(index_of_known),size=k)
+          stories_removed<-index_of_known[takeout]
+          save_old<-user[stories_removed]
+          user[stories_removed]<-0
+          valid_set[userid,]<-user
+          valid_u<-valid_set%*%Vprime
+          recommended<-SVD_top_X_recommendations(valid_u,Vprime,userid,k,valid_set)
+          matched=length(intersect(story_ids[stories_removed],recommended))
+          precision_vector[userid]<-(matched/k)
+          recall_vector[userid]<-(matched/(length(index_of_known)))
+          user[stories_removed]<-save_old
+          valid_set[userid,]<-user
+          scores<-SVD_item_scores(valid_u,Vprime,userid)
+          rmse<-sqrt(mean((scores-valid_set[userid,])^2))
+          rmse_vector[userid]<-rmse
+        }
+      }
+      mean_precision_vec[i] <- mean(precision_vector)
+      mean_recall_vec[i]<-mean(recall_vector)
+      mean_rmse_vec[i]<-mean(rmse_vector)
+   }
+   results_cv[1,]<-c(d,mean(mean_precision_vec),mean(mean_recall_vec),mean(mean_rmse_vec))
+   return(results_cv)
+}
+})
+stopCluster(cluster)
+
+
+ggplot(data=data.frame(results),aes(x=d,y=rmse))+
+  geom_line()+
+  xlab("Number of dimensions in SVD")+
+  ylab("RMSE")
+```
+
+## Questions 
+
+How many dimensions would you prefer to use in the SVD method?
+
+Compare the performance of SVD method against collaborative filtering, and also compare the popularity of the items recommended by the SVD method versus the average popularity of the stories.
+
+How would you modify these methods to recommend unpopular stories that don't receive much activity?
+
+How would you make recommendations to a user with no history of activity?
+
+Inspect the output of the various recommendation methods, and analyze the diversity of recommendations as you did in `rec_sys_tutorial`. Is the algorithm recommending stories with varying features and popularity?  
