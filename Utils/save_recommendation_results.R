@@ -9,12 +9,16 @@ recommender_results_data_frame<-function(recommender_fun, recommender_fun_args){
   if (length(ranked_items) == 0) return(ranked_items)
   X <- recommender_fun_args$X
   user_index <- recommender_fun_args$userid
-  rows <- tibble(user_index, child_id = child_ids[user_index], item_rank = 1:min(X,length(ranked_items)), story_id = ranked_items)
+  n_rows <- min(X,length(ranked_items))
+  rows <- tibble(user_index,
+                 child_id = child_ids[user_index],
+                 item_rank = 1:n_rows,
+                 story_id = ranked_items[1:n_rows])
   return(rows)
 }
 
 
-save_recommender_results<-function(recommender_fun, recommender_fun_args, filename, full=FALSE){
+save_recommender_results<-function(recommender_fun, recommender_fun_args, filename, full=FALSE, limit_rows=NaN){
   
   if(full) {
     recommender_fun_args[["userid"]] <- 1
@@ -29,7 +33,7 @@ save_recommender_results<-function(recommender_fun, recommender_fun_args, filena
     print("No new rows")
     return()
   }
-  cat("Next user: ", next_user)
+  cat("Next user: ", next_user, "\n")
   
   num_new_rows <- 0
   for (i in next_user:nrow(ratings_matrix)) {
@@ -39,11 +43,16 @@ save_recommender_results<-function(recommender_fun, recommender_fun_args, filena
       recommender_results_item = rbind(recommender_results_item, rows)
       num_new_rows <- num_new_rows + length(rows)
     }
+    if (is.finite(limit_rows)) {
+      if (num_new_rows > limit_rows) {
+        break
+      }
+    }
   }
   
   if (num_new_rows > 0) {
     cat("Updating file with ", num_new_rows, "new rows")
-    write.csv(recommender_results_item, paste("Results/",filename, sep = ""), row.names = FALSE)  
+    write.csv(recommender_results_item, paste("/cloud/project/Results/",filename, sep = ""), row.names = FALSE)  
   } else {
     print("No new rows")
   }
