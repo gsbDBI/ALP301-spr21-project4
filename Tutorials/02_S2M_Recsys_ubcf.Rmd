@@ -189,29 +189,52 @@ length(recommender_results_item_five)
 
 ```{r diversity_user_based_recs_sequentiall, eval=FALSE}
 
-# recommender_results_item_one <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
-#   return(User_top_X_recommendations(i, 1, utility_matrix, similarity_matrix_user))
-# }
+recommender_results_item_one <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
+  return(User_top_X_recommendations(i, 1, utility_matrix, similarity_matrix_user))
+}
 
-recommender_results_item_five <- foreach(i = 1:10, .combine = append) %dopar% {
+recommender_results_item_five <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
   return(User_top_X_recommendations(i, 5, utility_matrix, similarity_matrix_user))
 }
 
-# recommender_results_item_one <- unique(recommender_results_item_one)
-# recommender_results_item_five <- unique(recommender_results_item_five)
+recommender_results_item_one <- unique(recommender_results_item_one)
+recommender_results_item_five <- unique(recommender_results_item_five)
 
 # First, note how many stories in total are recommended, out of 1087:
-# length(recommender_results_item_one)
+length(recommender_results_item_one)
 length(recommender_results_item_five)
 ```
 
-```{r, eval=FALSE}
-source("Utils/save_recomendation_results.R", local = knitr::knit_global())
-recommender_fun_args <- list(X=10, ratings_matrix=utility_matrix, similarity_matrix_user=similarity_matrix_user)
-Save_Recommender_Results(User_top_X_recommendations, recommender_fun_args, "rec_results_ubcf.csv", full=TRUE)
+```{r generate rec_results_ubcf, eval=FALSE}
+
+Recommender_Results_Data_Frame<-function(user_index, X, ratings_matrix,similarity_matrix_user){
+  ranked_items <- User_top_X_recommendations(user_index, X, ratings_matrix, similarity_matrix_user)
+  if (length(ranked_items) == 0) return(ranked_items)
+  rows <- tibble(user_index, child_id = child_ids[user_index], item_rank = 1:min(X,length(ranked_items)), story_id = ranked_items)
+  return(rows)
+}
+
+# If the file does not exist you have to start from the first user
+# recommender_results_item <- Recommender_Results_Data_Frame(1, 10, utility_matrix, similarity_matrix_user)
+# next_user = 2
+
+# If the file already exists you can load it and start from the last user processed
+recommender_results_item <- tibble(read_csv("Results/rec_results_ubcf.csv"),col_types = cols(.default = col_double()))
+next_user = recommender_results_item$user_index[nrow(recommender_results_item)] + 1
+cat("Next user: ", next_user)
+
+for (i in next_user:nrow(utility_matrix)) {
+  rows = Recommender_Results_Data_Frame(i, 10, utility_matrix, similarity_matrix_user)
+  if (length(rows) > 1) {
+    recommender_results_item = rbind(recommender_results_item, rows)  
+  }
+}
+  
+# Overwrite the current file
+write.csv(recommender_results_item, "Results/rec_results_ubcf.csv", row.names = FALSE)
 ```
 
-```{r, eval=FALSE}
+```{r load_rec_results, eval=FALSE}
 recommender_results_item <- tibble(read_csv("Results/rec_results_ubcf.csv"))
 
 recommender_results_item_one <- unique(filter(recommender_results_item, item_rank <= 1)$story_id)
