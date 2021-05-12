@@ -57,8 +57,6 @@ utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.0
 
 ```
 
-Split into new vs. old datasets
-
 ```{r}
 
 #check that filtering is working
@@ -79,6 +77,10 @@ rm(utility_mat)  # this variable is no longer needed
 ```{r}
 source("../RecSys/get_item_scores.R", local = knitr:knit_global())
 ```
+
+#UBCF ANALYSIS
+
+OLD USERS
 
 ```{r old users ubcf create recs}
 
@@ -101,6 +103,32 @@ source("../RecSys/get_item_scores.R", local = knitr:knit_global())
 ```
 
 ```{r old users ubcf cold start analysis}
+
+```
+
+NEW USERS
+
+```{r new users ubcf create recs}
+
+```
+
+```{r new users ubcf all-but-k evaluation}
+
+```
+
+```{r new users ubcf all-but-k fold}
+
+```
+
+```{r new users ubcf diversity}
+
+```
+
+```{r new users ubcf engagement metric}
+
+```
+
+```{r new users ubcf cold start analysis}
 
 ```
 
