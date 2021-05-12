@@ -44,6 +44,40 @@ get_item_scores_generator<-function(utility_matrix, type, params=list()) {
         cbf_get_item_scores(userid, ratings_matrix, similarity_matrix_story)
       }
     )
+  } else if(type == 'ensamble') {
+    if(run_source_cbf) source(paste(path, "/Models/cbf.R", sep=""), local = knitr::knit_global())
+    similarity_matrix_story <- cbf_get_similarity_matrix(utility_matrix, params)
+    
+    if(run_source_ubcf) source(paste(path, "/Models/ubcf.R", sep=""), local = knitr::knit_global())
+    similarity_matrix_user <- ubcf_get_similarity_matrix(utility_matrix)
+    
+    if(run_source_ibcf) source(paste(path, "/Models/ibcf.R", sep=""), local = knitr::knit_global())
+    if(run_source_svd) source(paste(path, "/Models/svd.R", sep=""), local = knitr::knit_global())
+    
+    return(
+      function(userid, ratings_matrix) {
+        x1 = ubcf_get_item_scores(userid, ratings_matrix, similarity_matrix_user)
+        x2 = cbf_get_item_scores(userid, ratings_matrix, similarity_matrix_story)
+        
+        w->params$w
+        
+        w$x1 * x1 + w$x2 * x2
+      }
+    )
+  } else if(type == 'ensambel2') {
+    # params <- list(w=list(cbf=0.5, ubcf=0.5), cbf=list(story_info=story_info, story_ids=story_ids), ubcf=list())
+    cbf_recys <- get_item_scores_generator(utility_matrix, "cbf", params$cbf)
+    ubcf_recys <- get_item_scores_generator(utility_matrix, "ubcf", params$ubcf)
+    return(
+      function(userid, ratings_matrix) {
+        x_cbf = cbf_recys(userid, ratings_matrix)
+        x_ubcf = ubcf_recys(userid, ratings_matrix)
+        
+        w->params$w
+        
+        w$cbf * x_cbf + w$ubcf * x_ubcf
+      }
+    )
   } else {
     return()
   }
