@@ -9,6 +9,7 @@ if (!exists("run_source_ubcf")) run_source_ubcf <- TRUE
 if (!exists("run_source_ibcf")) run_source_ibcf <- TRUE
 if (!exists("run_source_svd")) run_source_svd <- TRUE
 if (!exists("run_source_cbf")) run_source_cbf <- TRUE
+if (!exists("run_source_fm")) run_source_fm <- TRUE
 
 path = "/cloud/project/RecSys"
 get_item_scores_generator<-function(utility_matrix, type, params=list()) {
@@ -44,8 +45,15 @@ get_item_scores_generator<-function(utility_matrix, type, params=list()) {
         cbf_get_item_scores(userid, ratings_matrix, similarity_matrix_story)
       }
     )
+  } else if(type == 'fm') {
+    if(run_source_fm) source(paste(path, "/Models/fm.R", sep=""), local = knitr::knit_global())
+    fm_cleaned_dataset <- fm_get_factorization_matrix(params)
+    return(
+      function(userid, ratings_matrix){
+        fm_get_item_scores(userid, ratings_matrix, fm_cleaned_dataset, params)
+      }
+    )
   } else {
     return()
   }
-  
 }

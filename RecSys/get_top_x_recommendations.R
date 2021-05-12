@@ -10,7 +10,8 @@ get_top_x_recommendations<-function(userid, X, ratings_matrix, get_item_scores) 
   user_row<-ratings_matrix[userid,]
   unknown_stories<-user_row==0
   names_unknown<-story_ids[unknown_stories]
-  index <- which(item_scores[unknown_stories] >= sort(item_scores[unknown_stories], decreasing=T)[X], arr.ind=TRUE)
+  unknown_stories_name <- names(unknown_stories[unknown_stories == TRUE])
+  index <- which(item_scores[unknown_stories_name] >= sort(item_scores[unknown_stories_name], decreasing=T)[X], arr.ind=TRUE)
   
   names_unknown[index]
 }
