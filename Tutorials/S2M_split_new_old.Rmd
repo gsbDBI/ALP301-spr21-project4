@@ -37,8 +37,6 @@ rm(list = ls())
 story_info<- read_csv("Datasets/all_story_obs.csv")
 utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
 num_cols <- 2527
-
-
 child_ids<-as.integer(utility_mat$child_id_code)
 story_ids<-as.integer(colnames(utility_mat[,3:num_cols]))
 
@@ -79,6 +77,7 @@ rm(utility_mat)  # this variable is no longer needed
 ```
 
 ```{r}
+source("../RecSys/get_item_scores.R", local = knitr:knit_global())
 ```
 
 
