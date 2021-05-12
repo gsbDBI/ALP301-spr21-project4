@@ -80,6 +80,27 @@ rm(utility_mat)  # this variable is no longer needed
 source("../RecSys/get_item_scores.R", local = knitr:knit_global())
 ```
 
+```{r old users ubcf create recs}
 
+```
 
+```{r old users ubcf all-but-k evaluation}
+
+```
+
+```{r old users ubcf all-but-k fold}
+
+```
+
+```{r old users ubcf diversity}
+
+```
+
+```{r old users ubcf engagement metric}
+
+```
+
+```{r old users ubcf cold start analysis}
+
+```
 
