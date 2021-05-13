@@ -1,5 +1,5 @@
 ---
-title: 'Alp 301: Stones2Milestones, Recommendation Systems 1'
+title: 'Preliminary Results'
 output:
   html_document:
     highlight: haddock
@@ -20,16 +20,16 @@ date: "April 2021"
 ```{r, message = FALSE, warning = FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse)
-pacman::p_load(here)
-pacman::p_load(lmtest)
-pacman::p_load(glue)
-pacman::p_load(broom)
-pacman::p_load(ri2)
-pacman::p_load(margins)
-pacman::p_load(glmnet) 
-pacman::p_load(kableExtra)
-pacman::p_load(stargazer)
-pacman::p_load(knitr)
+# pacman::p_load(here)
+# pacman::p_load(lmtest)
+# pacman::p_load(glue)
+# pacman::p_load(broom)
+# pacman::p_load(ri2)
+# pacman::p_load(margins)
+# pacman::p_load(glmnet) 
+# pacman::p_load(kableExtra)
+# pacman::p_load(stargazer)
+# pacman::p_load(knitr)
 pacman::p_load(doParallel)
 pacman::p_load(corrplot)
 
@@ -55,7 +55,7 @@ rm(initialization)
 ```{r alternative}
 source("../RecSys/get_item_scores.R", local = knitr::knit_global())
 source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
-source("../Utils/save_recommendation_results.R", local = knitr::knit_global())
+source("../Utils/save_recommender_results.R", local = knitr::knit_global())
 source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
 source("../Utils/test_all_but_k.R", local = knitr::knit_global())
 ```
@@ -185,10 +185,30 @@ test_all_but_k(10,utility_matrix, "svd", params)
 
 ```
 
-## Cross Validation for SVD
+## Cross Validation
 
+```{r}
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
 
-How do we choose how many dimensions to use? It's a good idea to do cross-validation, using precision at K as our metric.
+folds <- 10
+X <- 5 # We will use precision at 5
+
+type <- "ibcf"
+params <- list()
+cross_validation_recsys(utility_matrix, folds, X, type, params)
+
+type <- "ubcf"
+params <- list()
+cross_validation_recsys(utility_matrix, folds, X, type, params)
+
+type <- "cbf"
+params <- list(story_info=story_info, story_ids=story_ids)
+cross_validation_recsys(utility_matrix, folds, X, type, params)
+
+type <- "svd"
+params <- list(d=20)
+cross_validation_recsys(utility_matrix, folds, X, type, params)
+```
 
 ```{r, eval=FALSE}
 #This is not run by default,
@@ -196,21 +216,6 @@ How do we choose how many dimensions to use? It's a good idea to do cross-valida
 #Delete "eval=FALSE" in rmarkdown
 #and run it yourself.
 
-SVD_top_X_recommendations<-function(U,Vprime,userid,X,ratings_matrix){
-  user_vector<-U[userid,]
-  scores<-U[userid,]%*%t(Vprime)
-  user_row<-ratings_matrix[userid,]
-  unknown_stories<-user_row==0
-  names_unknown<-story_ids[unknown_stories]
-  index <- which(scores[as.logical(unknown_stories)] >= sort(scores[as.logical(unknown_stories)], decreasing=T)[X], arr.ind=TRUE)
-  return(names_unknown[index])
-}
-
-SVD_item_scores<-function(U,Vprime,userid){
-  user_vector<-U[userid,]
-  scores<-U[userid,]%*%t(Vprime)
-  return(scores)
-}
 
 # Parallelize computing to make things faster
 cluster <- makeCluster(min(detectCores(logical = TRUE) - 1,8)) 
@@ -219,63 +224,57 @@ clusterEvalQ(cluster, {})
 
 folds <- 5
 splitfolds <- sample(1:folds, nrow(utility_matrix), replace = TRUE)
-candidate_d <- c(2,4,6,8,10,12,14,16,18,20) #Candidate dimensions
-k<-5 #We will use precision at 5
+X <- 5 # We will use precision at 5
+type <- "ibcf"
+params <- list()
+
 
 # Export objects to the parallel sessions
-clusterExport(cluster, c("utility_matrix", "splitfolds", "folds", "candidate_d","SVD_top_X_recommendations","k","story_ids"))
+clusterExport(cluster, c("utility_matrix", "splitfolds", "X", "params", "type"))
 
 system.time({
-results <- foreach(j = 1:length(candidate_d), .combine = rbind) %dopar%{
-   d<-candidate_d[j]
-   results_cv <- matrix(0, nrow = 1, ncol = 4)
-   colnames(results_cv) <- c("d","precision at 5","recall at 5","rmse")
-   mean_precision_vec<-rep(0,folds)
-   mean_recall_vec<-rep(0,folds)
-   mean_rmse_vec<-rep(0,folds)
-   for(i in 1:folds){
-      train_set <- utility_matrix[splitfolds != i , ]
-      valid_set <- utility_matrix[splitfolds == i, ]
-      Vprime<-svd(train_set,nu=d,nv=d)$v
-      precision_vector<-rep(0,nrow(valid_set))
-      recall_vector<-rep(0,nrow(valid_set))
-      rmse_vector<-rep(0,nrow(valid_set))
-      for (userid in 1:nrow(valid_set)){
-        user=valid_set[userid,]
-        index_of_known<-which(user!=0)
-        if(length(index_of_known)>k){
-          takeout<-sample(1:length(index_of_known),size=k)
-          stories_removed<-index_of_known[takeout]
-          save_old<-user[stories_removed]
-          user[stories_removed]<-0
-          valid_set[userid,]<-user
-          valid_u<-valid_set%*%Vprime
-          recommended<-SVD_top_X_recommendations(valid_u,Vprime,userid,k,valid_set)
-          matched=length(intersect(story_ids[stories_removed],recommended))
-          precision_vector[userid]<-(matched/k)
-          recall_vector[userid]<-(matched/(length(index_of_known)))
-          user[stories_removed]<-save_old
-          valid_set[userid,]<-user
-          scores<-SVD_item_scores(valid_u,Vprime,userid)
-          rmse<-sqrt(mean((scores-valid_set[userid,])^2))
-          rmse_vector[userid]<-rmse
-        }
-      }
-      mean_precision_vec[i] <- mean(precision_vector)
-      mean_recall_vec[i]<-mean(recall_vector)
-      mean_rmse_vec[i]<-mean(rmse_vector)
-   }
-   results_cv[1,]<-c(d,mean(mean_precision_vec),mean(mean_recall_vec),mean(mean_rmse_vec))
-   return(results_cv)
-}
+results <- foreach(k = 1:folds, .combine = rbind) %dopar%{
+  results_cv <- matrix(0, nrow = 1, ncol = 4)
+  colnames(results_cv) <- c("k","precision at 5","recall at 5","rmse")
+  
+  train_set <- utility_matrix
+  valid_users <- which(splitfolds == k)
+  stories_removed <- list()
+  for (userid in valid_users){
+    user <- utility_matrix[userid,]
+    index_of_known <- which(user!=0)
+    takeout <- sample(1:length(index_of_known),size=X)
+    stories_removed[[userid]] <- index_of_known[takeout]
+    train_set[userid, stories_removed] <- 0
+  }
+  
+  recommender <- get_item_scores_generator(train_set, type, params)
+  precision_vector<-rep(0,nrow(valid_set))
+  recall_vector<-rep(0,nrow(valid_set))
+  rmse_vector<-rep(0,nrow(valid_set))
+  for (userid in valid_users){
+    recommended <- get_top_x_recommendations(userid, X, train_set, recommender)
+    matched=length(intersect(story_ids[stories_removed[userid]],recommended))
+    precision_vector[userid]<-(matched/k)
+    recall_vector[userid]<-(matched/(length(index_of_known)))
+    user[stories_removed]<-save_old
+    valid_set[userid,]<-user
+    scores<-SVD_item_scores(valid_u,Vprime,userid)
+    rmse<-sqrt(mean((scores-valid_set[userid,])^2))
+    rmse_vector[userid]<-rmse
+  }
+  mean_precision <- mean(precision_vector)
+  mean_recall<-mean(recall_vector)
+  mean_rmse<-mean(rmse_vector)
+   
+  results_cv[1,]<-c(k, mean_precision, mean_recall, mean_rmse)
+  return(results_cv)
+  }
 })
+
 stopCluster(cluster)
 
-
-ggplot(data=data.frame(results),aes(x=d,y=rmse))+
-  geom_line()+
-  xlab("Number of dimensions in SVD")+
-  ylab("RMSE")
+data.frame(results)
 ```
 
 ## Questions 
