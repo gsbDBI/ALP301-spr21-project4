@@ -37,11 +37,8 @@ rm(list = ls())
 story_info<- read_csv("Datasets/all_story_obs.csv")
 utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
 num_cols <- 2527
-
-#add 0s instead of NAs
 child_ids<-as.integer(utility_mat$child_id_code)
 story_ids<-as.integer(colnames(utility_mat[,3:num_cols]))
-utility_mat[is.na(utility_mat)]<-0.0
 
 #filter down from 2500+ stories to 1087 stories we have info on
 stories_with_text<-(story_ids %in% story_info$story_id_code)
@@ -49,16 +46,18 @@ utility_matrix<-utility_mat[,3:num_cols]
 utility_matrix<-utility_matrix[,stories_with_text]
 story_ids<-colnames(utility_matrix)
 
+#filter by number of "0" interactions because the opposite of that is interactions (.3, .5, 1). High 0 number means new user.
+utility_matrix_old_activity <- utility_matrix[ which(rowSums(is.na(utility_matrix))<=1062),]
+utility_matrix_new_activity <- utility_matrix[ which(rowSums(is.na(utility_matrix))>1062),]
+
+#add 0s instead of NAs
+utility_matrix_old_activity[is.na(utility_matrix_old_activity)]<-0.0
+utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.0
+
 
 ```
 
-Split into new vs. old datasets
-
 ```{r}
-
-#filter by number of "0" interactions because the opposite of that is interactions (.3, .5, 1). High 0 number means new user.
-utility_matrix_old_activity <- utility_matrix[ which(rowSums(utility_matrix==0)<=1062),]
-utility_matrix_new_activity <- utility_matrix[ which(rowSums(utility_matrix==0)>1062),]
 
 #check that filtering is working
 mean(rowSums(utility_matrix_old_activity == 0))
@@ -75,174 +74,61 @@ utility_matrix_new_activity<-as.matrix(utility_matrix_new_activity)
 rm(utility_mat)  # this variable is no longer needed
 ```
 
-
-```{r, new activity users data plot}
-
-items_interacted<-rowSums(utility_matrix_new_activity>0)
-items_viewed<-rowSums(utility_matrix_new_activity==0.3)
-items_opened<-rowSums(utility_matrix_new_activity==0.5)
-items_completed<-rowSums(utility_matrix_new_activity==1)
-
-ggplot(data=data.frame(items_interacted),aes(x=items_interacted))+
-  geom_histogram()+
-  xlab("Histogram of number items interacted (view/open/complete) per user")
-ggplot(data=data.frame(items_viewed),aes(x=items_viewed))+
-  geom_histogram()+
-  xlab("Histogram of number items viewed per user")
-ggplot(data=data.frame(items_opened),aes(x=items_opened))+
-  geom_histogram()+
-  xlab("Histogram of number items opened per user")
-ggplot(data=data.frame(items_completed),aes(x=items_completed))+
-  geom_histogram()+
-  xlab("Histogram of number items completed per user")
-
-```
-```{r, old activity users similarity matrix}
-
-sim1<- (utility_matrix_old_activity) %*% t(utility_matrix_old_activity)
-sim2<- (rowSums(utility_matrix_old_activity)) %*% t(rowSums(utility_matrix_old_activity))
-similarity_matrix_old_user <- sim1 / sim2
-similarity_matrix_old_user[is.nan(similarity_matrix_old_user)]<-0
+```{r}
+source("../RecSys/get_item_scores.R", local = knitr:knit_global())
 ```
 
-```{r UBCF on old activity users (high activity)}
-Old_Activity_User_top_X_recommendations<-function(userid,X,ratings_matrix,similarity_matrix_old_user){
-  #We need to remove items that they already know to from our recommendations.
-  user_row<-ratings_matrix[userid,]
-  known_stories<-user_row!=0 
-  unknown_stories<-user_row==0
-  other_users_ratings<-ratings_matrix[-userid,]
-  similarity_vector<-as.vector(similarity_matrix_old_user[userid,-userid])
-  item_scores<- (similarity_vector %*% other_users_ratings)/sum(similarity_vector)
-  names_unknown<-story_ids[unknown_stories]
-  index <- which(item_scores[unknown_stories] >= sort(item_scores[unknown_stories], decreasing=T)[X], arr.ind=TRUE)
-  return(names_unknown[index])
-}
+#UBCF ANALYSIS
 
-All_Item_Scores_UBCF<-function(userid,ratings_matrix,similarity_matrix_old_user){
-    user_row<-ratings_matrix[userid,]
-  known_stories<-user_row!=0  
-  unknown_stories<-user_row==0
-  other_users_ratings<-ratings_matrix[-userid,]
-  similarity_vector<-as.vector(similarity_matrix_old_user[userid,-userid])
-  item_scores<- (similarity_vector %*% other_users_ratings)/sum(similarity_vector)
-  return(item_scores)
-}
+OLD USERS
+
+```{r old users ubcf create recs}
+
 ```
 
-```{r test on 5 recs for user 100}
-recs<-Old_Activity_User_top_X_recommendations(100,5,utility_matrix_old_activity,similarity_matrix_old_user)
-print(recs)
+```{r old users ubcf all-but-k evaluation}
+
 ```
 
-```{r UBCF test on all but K users, old}
-test_all_but_k_users<-function(k,ratings_matrix){
-  precision_vector<-vector()
-  recall_vector<-vector()
-  rmse_vector<-vector()
-  #Change the line below to run it on the entire dataset
-  num_rows=min(50,nrow(ratings_matrix))
-  for (userid in 1:num_rows){
-    user=ratings_matrix[userid,]
-    index_of_known<-which(user!=0)
-    if(length(index_of_known)>k){
-      takeout<-sample(1:length(index_of_known),size=k)
-      stories_removed<-index_of_known[takeout]
-      save_old<-user[stories_removed]
-      ratings_matrix[userid,stories_removed]<-0
-      sim1<- (ratings_matrix) %*% t(ratings_matrix)
-      sim2<- (rowSums(ratings_matrix)) %*% t(rowSums(ratings_matrix))
-      similarity_matrix_old_user <- sim1 / sim2
-      similarity_matrix_old_user[is.nan(similarity_matrix_old_user)]<-0
-      recommended<-Old_Activity_User_top_X_recommendations(userid,k,ratings_matrix,similarity_matrix_old_user)
-      matched=length(intersect(story_ids[stories_removed],recommended))
-      precision_vector<-append(precision_vector,matched/k)
-      recall_vector<-append(recall_vector,(matched/(length(index_of_known))))
-      ratings_matrix[userid,stories_removed]<-save_old
-      allscores<-All_Item_Scores_UBCF(userid,ratings_matrix,similarity_matrix_old_user)
-      rmse<-sqrt(mean((allscores-ratings_matrix[userid,])^2))
-      rmse_vector<-append(rmse_vector,rmse)
-    }
-  }
-  return(c("Precision"=mean(precision_vector),"Recall"=mean(recall_vector), "RMSE"=mean(rmse_vector)))
-}
-#Performance of user based recommendations
-test_all_but_k_users(2,utility_matrix_old_activity)
-test_all_but_k_users(5,utility_matrix_old_activity)
-test_all_but_k_users(10,utility_matrix_old_activity)
+```{r old users ubcf all-but-k fold}
+
 ```
 
-```{r, new activity users similarity matrix}
+```{r old users ubcf diversity}
 
-sim1<- (utility_matrix_new_activity) %*% t(utility_matrix_new_activity)
-sim2<- (rowSums(utility_matrix_new_activity)) %*% t(rowSums(utility_matrix_new_activity))
-similarity_matrix_new_user <- sim1 / sim2
-similarity_matrix_new_user[is.nan(similarity_matrix_new_user)]<-0
 ```
 
-```{r UBCF on new activity users (high activity)}
-New_Activity_User_top_X_recommendations<-function(userid,X,ratings_matrix,similarity_matrix_new_user){
-  #We need to remove items that they already know to from our recommendations.
-  user_row<-ratings_matrix[userid,]
-  known_stories<-user_row!=0 
-  unknown_stories<-user_row==0
-  other_users_ratings<-ratings_matrix[-userid,]
-  similarity_vector<-as.vector(similarity_matrix_new_user[userid,-userid])
-  item_scores<- (similarity_vector %*% other_users_ratings)/sum(similarity_vector)
-  names_unknown<-story_ids[unknown_stories]
-  index <- which(item_scores[unknown_stories] >= sort(item_scores[unknown_stories], decreasing=T)[X], arr.ind=TRUE)
-  return(names_unknown[index])
-}
+```{r old users ubcf engagement metric}
 
-All_Item_Scores_UBCF<-function(userid,ratings_matrix,similarity_matrix_new_user){
-    user_row<-ratings_matrix[userid,]
-  known_stories<-user_row!=0  
-  unknown_stories<-user_row==0
-  other_users_ratings<-ratings_matrix[-userid,]
-  similarity_vector<-as.vector(similarity_matrix_new_user[userid,-userid])
-  item_scores<- (similarity_vector %*% other_users_ratings)/sum(similarity_vector)
-  return(item_scores)
-}
 ```
 
-```{r test on 5 recs for user 100}
-recs<-New_Activity_User_top_X_recommendations(100,5,utility_matrix_new_activity,similarity_matrix_new_user)
-print(recs)
+```{r old users ubcf cold start analysis}
+
 ```
 
-```{r UBCF test on all but K users, new}
-test_all_but_k_users<-function(k,ratings_matrix){
-  precision_vector<-vector()
-  recall_vector<-vector()
-  rmse_vector<-vector()
-  #Change the line below to run it on the entire dataset
-  num_rows=min(20,nrow(ratings_matrix))
-  for (userid in 1:num_rows){
-    user=ratings_matrix[userid,]
-    index_of_known<-which(user!=0)
-    if(length(index_of_known)>k){
-      takeout<-sample(1:length(index_of_known),size=k)
-      stories_removed<-index_of_known[takeout]
-      save_old<-user[stories_removed]
-      ratings_matrix[userid,stories_removed]<-0
-      sim1<- (ratings_matrix) %*% t(ratings_matrix)
-      sim2<- (rowSums(ratings_matrix)) %*% t(rowSums(ratings_matrix))
-      similarity_matrix_new_user <- sim1 / sim2
-      similarity_matrix_new_user[is.nan(similarity_matrix_new_user)]<-0
-      recommended<-New_Activity_User_top_X_recommendations(userid,k,ratings_matrix,similarity_matrix_new_user)
-      matched=length(intersect(story_ids[stories_removed],recommended))
-      precision_vector<-append(precision_vector,matched/k)
-      recall_vector<-append(recall_vector,(matched/(length(index_of_known))))
-      ratings_matrix[userid,stories_removed]<-save_old
-      allscores<-All_Item_Scores_UBCF(userid,ratings_matrix,similarity_matrix_new_user)
-      rmse<-sqrt(mean((allscores-ratings_matrix[userid,])^2))
-      rmse_vector<-append(rmse_vector,rmse)
-    }
-  }
-  return(c("Precision"=mean(precision_vector),"Recall"=mean(recall_vector), "RMSE"=mean(rmse_vector)))
-}
-#Performance of user based recommendations
-test_all_but_k_users(2,utility_matrix_new_activity)
-test_all_but_k_users(5,utility_matrix_new_activity)
-test_all_but_k_users(10,utility_matrix_new_activity)
+NEW USERS
+
+```{r new users ubcf create recs}
+
 ```
+
+```{r new users ubcf all-but-k evaluation}
+
+```
+
+```{r new users ubcf all-but-k fold}
+
+```
+
+```{r new users ubcf diversity}
+
+```
+
+```{r new users ubcf engagement metric}
+
+```
+
+```{r new users ubcf cold start analysis}
+
+```
+
