@@ -5,7 +5,7 @@
 
 get_top_x_recommendations<-function(userid, X, ratings_matrix, get_item_scores) {
   item_scores <- get_item_scores(userid, ratings_matrix)
-  
+  story_ids<-colnames(ratings_matrix)
   # We need to remove items that they already know to from our recommendations.
   user_row<-ratings_matrix[userid,]
   unknown_stories<-user_row==0
