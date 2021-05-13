@@ -1,0 +1,108 @@
+---
+title: 'Factorization Machine Code'
+output:
+  html_document:
+    highlight: haddock
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+date: "April 2021"
+---
+
+```{r setup, include=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse)
+pacman::p_load(here)
+pacman::p_load(lmtest)
+pacman::p_load(glue)
+pacman::p_load(broom)
+pacman::p_load(ri2)
+pacman::p_load(margins)
+pacman::p_load(glmnet) 
+pacman::p_load(kableExtra)
+pacman::p_load(stargazer)
+pacman::p_load(knitr)
+pacman::p_load(doParallel)
+pacman::p_load(corrplot)
+pacman::p_load(corrplot)
+pacman::p_load(rsparse)
+pacman::p_load(recommenderlab)
+pacman::p_load(reshape2)
+pacman::p_load(ggplot2)
+
+rm(list = ls())
+
+# Note for 2021 data (coverage: 2020-05-01 to 2021-01-31): 
+## filter60 means that we filtered out interactions involving
+# children who made fewer than 60 interactions;
+# after filtering, there are 11202 users left.
+# This applies to both utils_mat_filtered.csv and utils_raw_filter60.csv.
+
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+set.seed(1992)
+rows<-sample(1:nrow(utility_mat),size=5000)
+utility_mat <- utility_mat[rows, ]
+user_mapping <- utility_mat[,1:2]
+
+source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
+initialization <- initialize_utility_matrix(utility_mat, story_info, 500)
+
+utility_matrix <- initialization$utility_matrix
+story_ids <- initialization$story_ids
+
+utils_raw_file <- "Datasets/utils_raw_filter60.csv"
+
+# read story/user characteristics
+story_info<- read_csv("Datasets/all_story_obs.csv")
+user_info <- read_csv("Datasets/user_interests.csv")
+
+# read child-story interaction data
+utility_data_raw<-read_csv(utils_raw_file,col_types = cols(.default = col_double()))
+
+story_attr <- c("totpage","wordcount","story_id_code","n_people")
+user_attr <- c("i_Life_skills","grade", "user_id")
+seed_value <- 123
+
+# Note - below is the list of all parameters we will need to input
+params<-list(raw_matrix=utility_data_raw, story_info=story_info,
+             user_info=user_info, story_attr=story_attr, user_attr=user_attr,
+             model_type="gaussian", user_mapping = user_mapping
+             , seed_value = seed_value)
+```
+
+Now to run the code - Factorization Machine
+
+```{r}
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+FM_item_scores<-get_item_scores_generator(utility_matrix, "fm", params)
+FM_top_X_recommendations<-function(userid, X, utility_matrix, story_ids){
+  get_top_x_recommendations(userid, X, utility_matrix, story_ids, FM_item_scores)
+}
+
+recs<-FM_top_X_recommendations(10, 5, utility_matrix, story_ids)
+```
+
+Now to run the code - Random Model
+
+```{r}
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+set.seed(123)
+random_item_scores<-get_item_scores_generator(utility_matrix, "random")
+random_top_X_recommendations<-function(userid, X, utility_matrix, story_ids){
+  get_top_x_recommendations(userid, X, utility_matrix, story_ids, random_item_scores)
+}
+recs<-random_top_X_recommendations(10, 5, utility_matrix, story_ids)
+recs
+```
+

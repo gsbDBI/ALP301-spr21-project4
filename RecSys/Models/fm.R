@@ -22,35 +22,37 @@ fm_get_factorization_matrix<-function(params){
     user_info <- user_info %>% select(one_of(params$user_attr))
     merged_data<-left_join(utility_data_raw, user_info, by = c("user_id"="user_id")) %>% drop_na
   }
-  merged_data
-}
-
-fm_get_item_scores <- function(userid, ratings_matrix, fm_cleaned_dataset, params){
-  # initialize model
+  
+  #Now to train model and generate scores
   factors <- append(params$story_attr, params$user_attr)
   formula_fm <- as.formula(paste("intensity~", paste(factors, collapse="+")))
-  train_matrix <- model.matrix(formula_fm, data = fm_cleaned_dataset)
+  train_matrix <- model.matrix(formula_fm, data = merged_data)
   train_matrix_sparse = as(train_matrix, "RsparseMatrix")
   if(params$model_type == "binomial"){
-    train_outcome <-ifelse(fm_cleaned_dataset$intensity>0.4,1,0)
+    train_outcome <-ifelse(merged_data$intensity>0.4,1,0)
   } else{
-    train_outcome <- fm_cleaned_dataset$intensity
+    train_outcome <- merged_data$intensity
   }
   # run model
+  set.seed(params$seed_value)
   fm = FactorizationMachine$new(learning_rate_w = 0.06, rank = 15, lambda_w = 0.001,
                                 lambda_v = 0.001, family = params$model_type, intercept = FALSE)
   res = fm$fit(train_matrix_sparse, train_outcome, n_iter = 50)
-  fm_cleaned_dataset$preds = fm$predict(train_matrix)
+  merged_data$preds = fm$predict(train_matrix)
   
+  merged_data
+}
+
+fm_get_item_scores <- function(userid, ratings_matrix, fm_model_prediction, params){
   # User Index Position
-  user_index <- params$user_mapping$child_id_code[params$user_mapping$X1 == user_id]
+  user_index <- params$user_mapping$child_id_code[params$user_mapping$X1 == userid]
   
-  prediction_values <- fm_cleaned_dataset$preds[fm_cleaned_dataset$user_id==user_index]
-  story_positions <- fm_cleaned_dataset$story_id_code[fm_cleaned_dataset$user_id==user_index]
+  prediction_values <- fm_model_prediction$preds[fm_model_prediction$user_id==user_index]
+  story_positions <- fm_model_prediction$story_id_code[fm_model_prediction$user_id==user_index]
   
   item_scores <- structure(prediction_values, names = as.character(story_positions))
   filtered_item_scores <- item_scores[colnames(ratings_matrix)]
-  final_item_scores <- filtered_item_scores[!is.na(filtered_vectors) == TRUE]
+  final_item_scores <- filtered_item_scores[!is.na(filtered_item_scores) == TRUE]
   final_item_scores
 }
 
