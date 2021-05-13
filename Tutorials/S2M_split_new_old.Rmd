@@ -131,7 +131,7 @@ mean(results_df_old$precision.at.5)
 NEW USERS
 
 ```{r new users create recs}
-types <- c("cbf", "svd", "ibcf")
+types <- c("ibcf", "cbf", "svd")
 
 params <- list(ibcf=list(),
                ubcf=list(),
@@ -161,7 +161,7 @@ results_df_new <- tibble(type=types, usage="new", precision.at.5=precision_vecto
 
 ggplot(data = results_df_new) + 
   geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
-                           #size=rmse#, 
+                           size=rmse, 
                            color=type))
 
 mean(results_df_new$precision.at.5)
