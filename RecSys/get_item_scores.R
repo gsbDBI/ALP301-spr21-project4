@@ -9,6 +9,8 @@ if (!exists("run_source_ubcf")) run_source_ubcf <- TRUE
 if (!exists("run_source_ibcf")) run_source_ibcf <- TRUE
 if (!exists("run_source_svd")) run_source_svd <- TRUE
 if (!exists("run_source_cbf")) run_source_cbf <- TRUE
+if (!exists("run_source_random")) run_source_random <- TRUE
+
 
 path = "/cloud/project/RecSys"
 get_item_scores_generator<-function(utility_matrix, type, params=list()) {
@@ -44,6 +46,13 @@ get_item_scores_generator<-function(utility_matrix, type, params=list()) {
         cbf_get_item_scores(userid, ratings_matrix, similarity_matrix_story)
       }
     )
+   } else if(type == 'random') {
+      if(run_source_random) source(paste(path, "/Models/random.R", sep=""), local = knitr::knit_global())
+     random_get_random_matrix <- random_get_random_matrix(utility_matrix)
+      return(
+        function(userid, ratings_matrix){
+          random_get_item_scores(userid, ratings_matrix, random_get_random_matrix)
+        } )
   } else {
     return()
   }

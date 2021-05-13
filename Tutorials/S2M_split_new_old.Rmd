@@ -85,12 +85,13 @@ source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
 OLD USERS
 
 ```{r old users create recs}
-types <- c("cbf", "svd", "ibcf")
+types <- c("random", "cbf", "svd", "ibcf")
 
 params <- list(ibcf=list(),
                ubcf=list(),
                cbf=list(story_info=story_info, story_ids=story_ids),
-               svd=list(d=20))
+               svd=list(d=20),
+               random = list())
 
 for (type in types) {
   cat("Type: ", type, "\n")
@@ -131,12 +132,13 @@ mean(results_df_old$precision.at.5)
 NEW USERS
 
 ```{r new users create recs}
-types <- c("ibcf", "cbf", "svd")
+types <- c("random", "ibcf", "cbf", "svd")
 
 params <- list(ibcf=list(),
                ubcf=list(),
                cbf=list(story_info=story_info, story_ids=story_ids),
-               svd=list(d=20))
+               svd=list(d=20),
+               random=list())
 
 for (type in types) {
   cat("Type: ", type, "\n")
