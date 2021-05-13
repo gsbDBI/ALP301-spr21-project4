@@ -75,60 +75,103 @@ rm(utility_mat)  # this variable is no longer needed
 ```
 
 ```{r}
-source("../RecSys/get_item_scores.R", local = knitr:knit_global())
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
 ```
 
 #UBCF ANALYSIS
 
 OLD USERS
 
-```{r old users ubcf create recs}
+```{r old users create recs}
+types <- c("cbf", "svd", "ibcf")
+
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20))
+
+for (type in types) {
+  cat("Type: ", type, "\n")
+  cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
+                                   folds=10, X=5, type=type, key="old", params=params[[type]])
+}
 
 ```
 
-```{r old users ubcf all-but-k evaluation}
+```{r}
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_old.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results_df_old <- tibble(type=types, usage="old", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df_old) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type))
+
+mean(results_df_old$precision.at.5)
 
 ```
 
-```{r old users ubcf all-but-k fold}
+```{r old users diversity}
 
 ```
 
-```{r old users ubcf diversity}
-
-```
-
-```{r old users ubcf engagement metric}
-
-```
-
-```{r old users ubcf cold start analysis}
+```{r old users engagement metric}
 
 ```
 
 NEW USERS
 
-```{r new users ubcf create recs}
+```{r new users create recs}
+types <- c("cbf", "svd", "ibcf")
+
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20))
+
+for (type in types) {
+  cat("Type: ", type, "\n")
+  cross_validation_recsys(utility_matrix=utility_matrix_new_activity,
+                                   folds=10, X=5, type=type, key="new", params=params[[type]])
+}
 
 ```
 
-```{r new users ubcf all-but-k evaluation}
+```{r new users all-but-k evaluation}
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_new.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results_df_new <- tibble(type=types, usage="new", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df_new) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           #size=rmse#, 
+                           color=type))
+
+mean(results_df_new$precision.at.5)
+```
+
+```{r new users diversity}
 
 ```
 
-```{r new users ubcf all-but-k fold}
-
-```
-
-```{r new users ubcf diversity}
-
-```
-
-```{r new users ubcf engagement metric}
-
-```
-
-```{r new users ubcf cold start analysis}
+```{r new users engagement metric}
 
 ```
 

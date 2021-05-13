@@ -210,6 +210,24 @@ params <- list(d=20)
 cross_validation_recsys(utility_matrix, folds, X, type, params)
 ```
 
+```{r}
+types <- c("ubcf", "ibcf", "cbf", "svd")
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],".csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results_df_old <- tibble(type=types, usage="old", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df_old) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type))
+```
+
 ```{r, eval=FALSE}
 #This is not run by default,
 #because it takes a long time.
