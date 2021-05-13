@@ -75,7 +75,9 @@ rm(utility_mat)  # this variable is no longer needed
 ```
 
 ```{r}
-source("../RecSys/get_item_scores.R", local = knitr:knit_global())
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
 ```
 
 #UBCF ANALYSIS
@@ -83,7 +85,36 @@ source("../RecSys/get_item_scores.R", local = knitr:knit_global())
 OLD USERS
 
 ```{r old users ubcf create recs}
+types <- c("cbf", "svd", "ibcf")
 
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20))
+
+for (type in c("ubcf")) {
+  cat("Type: ", type, "\n")
+  cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
+                                   folds=10, X=5, type=type, key="old", params=params[[type]])
+}
+
+```
+
+```{r}
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_old.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results_df <- tibble(type=types, usage="old", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type))
 ```
 
 ```{r old users ubcf all-but-k evaluation}
