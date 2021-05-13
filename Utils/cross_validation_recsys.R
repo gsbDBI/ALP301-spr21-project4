@@ -33,6 +33,7 @@ cross_validation_recsys <- function(utility_matrix, folds, X, type, params, key=
         precision_vector[userid]<-(matched/k)
         recall_vector[userid]<-(matched/(length(index_of_known)))
         scores<-recommender(userid, train_set)
+        scores[is.na(scores)]<-0.0
         rmse<-sqrt(mean((scores-utility_matrix[userid,])^2))
         rmse_vector[userid]<-rmse
       }
