@@ -23,4 +23,5 @@ plot_diversity_recsys<-function(filename) {
     xlab("Number of readers") +
     ylab("Density") + 
     xlim(0, 1000)
+
 }
