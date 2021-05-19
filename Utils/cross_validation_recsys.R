@@ -1,8 +1,9 @@
-cross_validation_recsys <- function(utility_matrix, folds, X, type, params, seed=301) {
+cross_validation_recsys <- function(utility_matrix, folds, X, type, params, key="", seed=301) {
   set.seed(seed)
   splitfolds <- sample(1:folds, nrow(utility_matrix), replace = TRUE)
   results_cv <- matrix(NA, nrow = folds, ncol = 5)
   for (k in 1:folds){
+    cat("\tFold: ", k,"\n")
     colnames(results_cv) <- c("k","precision at 5","recall at 5","rmse","n")
     
     train_set <- utility_matrix
@@ -32,6 +33,7 @@ cross_validation_recsys <- function(utility_matrix, folds, X, type, params, seed
         precision_vector[userid]<-(matched/k)
         recall_vector[userid]<-(matched/(length(index_of_known)))
         scores<-recommender(userid, train_set)
+        scores[is.na(scores)]<-0.0
         rmse<-sqrt(mean((scores-utility_matrix[userid,])^2))
         rmse_vector[userid]<-rmse
       }
@@ -44,8 +46,8 @@ cross_validation_recsys <- function(utility_matrix, folds, X, type, params, seed
     results_cv[k,]<-c(k, mean_precision, mean_recall, mean_rmse, n)
   }
   
-  data.frame(results_cv)
-  
-  filename = paste("top_",X,"_",folds,"_fold_cv_",type,".csv", sep = "")
+  filename = paste("top_",X,"_",folds,"_fold_cv_",type,"_",key,".csv", sep = "")
   write.csv(data.frame(results_cv), paste("/cloud/project/Results/",filename, sep = ""), row.names = FALSE)
+  
+  data.frame(results_cv)
 }
