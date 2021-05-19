@@ -39,7 +39,9 @@ fm_get_factorization_matrix<-function(params){
                                 lambda_v = 0.001, family = params$model_type, intercept = FALSE)
   res = fm$fit(train_matrix_sparse, train_outcome, n_iter = 50)
   merged_data$preds = fm$predict(train_matrix)
-  
+  # Normalize values to between 0 and 1
+  merged_data$preds <- (merged_data$preds - min(merged_data$preds)) / 
+    (max(merged_data$preds) - min(merged_data$preds))
   merged_data
 }
 

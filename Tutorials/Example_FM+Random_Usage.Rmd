@@ -105,4 +105,3 @@ random_top_X_recommendations<-function(userid, X, utility_matrix, story_ids){
 recs<-random_top_X_recommendations(10, 5, utility_matrix, story_ids)
 recs
 ```
-
