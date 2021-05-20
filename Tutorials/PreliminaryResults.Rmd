@@ -1,0 +1,149 @@
+---
+title: 'Preliminary Results'
+output:
+  html_document:
+    highlight: haddock
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+date: "April 2021"
+---
+
+```{r, message = FALSE, warning = FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse)
+# pacman::p_load(here)
+# pacman::p_load(lmtest)
+# pacman::p_load(glue)
+# pacman::p_load(broom)
+# pacman::p_load(ri2)
+# pacman::p_load(margins)
+# pacman::p_load(glmnet) 
+# pacman::p_load(kableExtra)
+# pacman::p_load(stargazer)
+# pacman::p_load(knitr)
+pacman::p_load(doParallel)
+pacman::p_load(corrplot)
+
+rm(list = ls())
+
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+# set.seed(1992)
+# rows<-sample(1:nrow(utility_mat),size=5000)
+# utility_mat <- utility_mat[rows, ]
+
+source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
+initialization <- initialize_utility_matrix(utility_mat, story_info)
+
+utility_matrix <- initialization$utility_matrix
+story_ids <- initialization$story_ids
+child_ids <- initialization$child_ids
+
+rm(utility_mat)  # this variable is no longer needed
+rm(initialization)
+```
+
+```{r alternative}
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+source("../Utils/save_recommender_results.R", local = knitr::knit_global())
+source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
+source("../Utils/test_all_but_k.R", local = knitr::knit_global())
+```
+
+```{r, eval=FALSE}
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix, "random", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, SVD_item_scores)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
+filename = "rec_results_random.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+
+rm(item_scores)
+rm(top_X_recommendations)
+```
+
+```{r}
+plot_diversity_recsys("rec_results_random.csv")
+```
+```{r}
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix>0.3))
+    
+  # Create a data frame of recommendations
+  df1 <- data.frame(x = readers_per_story, label = rep("Overall", length(readers_per_story)))
+  df2 <- data.frame(x = popularity_fives, label = rep("Five_Recs", length(popularity_fives)))
+  df3 <- data.frame(x = popularity_ones, label = rep("One_Rec", length(popularity_ones)))
+  df <- rbind(df1, df2, df3)
+  df
+}
+
+df1 <- get_df_diversity("rec_results_svd.csv")
+df1$model <- "svd"
+df2 <- get_df_diversity("rec_results_ubcf.csv")
+df2$model <- "ubcf"
+
+df <- rbind(df1, df2)
+
+# Plot the number of readers per story
+ggplot(df, aes(x, y = ..count.., fill = label)) +
+  geom_density(color = "black", alpha = 0.5) +
+  facet_wrap(~ model) +
+  xlab("Number of readers") +
+  ylab("Density") + 
+  xlim(0, 1000)
+```
+
+## Cross Validation
+
+```{r}
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
+
+folds <- 10
+X <- 5 # We will use precision at 5
+type <- "cbf"
+params <- list(story_info=story_info, story_ids=story_ids)
+
+cross_validation_recsys(utility_matrix, folds, X, type, params)
+```
+
+```{r}
+types <- c("ubcf", "ibcf", "cbf", "svd", "random")
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],".csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results_df <- tibble(type=types, precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, fill=type), alpha=0.5, colour="black", pch=21)
+```
