@@ -80,7 +80,7 @@ source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
 source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
 ```
 
-#UBCF ANALYSIS
+# ANALYSIS
 
 OLD USERS
 
@@ -166,7 +166,14 @@ ggplot(data = results_df_new) +
                            size=rmse, 
                            color=type))
 
-mean(results_df_new$precision.at.5)
+random_rmse <- rmse_vector[1]
+random_rmse
+ibcf_rmse <- rmse_vector[2]
+ibcf_rmse
+cbf_rmse<- rmse_vector[3]
+cbf_rmse
+svd_rmse<- rmse_vector[4]
+svd_rmse
 ```
 
 ```{r new users diversity}
