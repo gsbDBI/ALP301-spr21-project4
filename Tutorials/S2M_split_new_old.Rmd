@@ -137,7 +137,7 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
 filename = "rec_results_random_old.csv"
-save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename)
 
 rm(item_scores)
 rm(top_X_recommendations)
@@ -152,13 +152,12 @@ get_df_diversity<-function(filename){
   index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
   index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
     
-  popularity_ones <- colSums(utility_matrix[, index_results_one]>0.3)
-  popularity_fives <- colSums(utility_matrix[, index_results_five]>0.3)
+  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]>0.3)
     
-  readers_per_story <- (colSums(utility_matrix>0.3)) }
+  readers_per_story <- (colSums(utility_matrix_old_activity>0.3)) }
 
-df1 <- get_df_diversity("rec_results_random_old.csv")
-df1$model <- "random"
+df <- get_df_diversity("rec_results_random_old.csv")
 
 plot_diversity_recsys("rec_results_random_old.csv")
 
