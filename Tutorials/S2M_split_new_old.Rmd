@@ -78,6 +78,9 @@ rm(utility_mat)  # this variable is no longer needed
 source("../RecSys/get_item_scores.R", local = knitr::knit_global())
 source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
 source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
+source("../Utils/save_recommender_results.R", local = knitr::knit_global())
+source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
+source("../Utils/test_all_but_k.R", local = knitr::knit_global())
 ```
 
 # ANALYSIS
@@ -122,6 +125,24 @@ mean(results_df_old$precision.at.5)
 ```
 
 ```{r old users diversity}
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix, "random", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, SVD_item_scores)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
+filename = "rec_results_random_old.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+
+rm(item_scores)
+rm(top_X_recommendations)
+
+plot_diversity_recsys("top_5_10_fold_cv_svd_old.csv")
+plot_diversity_recsys("top_5_10_fold_cv_random_old.csv")
+plot_diversity_recsys("top_5_10_fold_cv_ibcf_old.csv")
+plot_diversity_recsys("top_5_10_fold_cv_cbf_old.csv")
 
 ```
 
