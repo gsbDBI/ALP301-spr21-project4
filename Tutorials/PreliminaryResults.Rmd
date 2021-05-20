@@ -65,7 +65,7 @@ params<-list()
 item_scores<-get_item_scores_generator(utility_matrix, "random", params)
 rm(params)
 top_X_recommendations<-function(userid, X, ratings_matrix){
-  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+  get_top_x_recommendations(userid, X, ratings_matrix, svd_item_scores)
 }
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
