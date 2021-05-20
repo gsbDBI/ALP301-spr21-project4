@@ -126,7 +126,7 @@ mean(results_df_old$precision.at.5)
 
 ```{r old users diversity}
 params<-list()
-item_scores<-get_item_scores_generator(utility_matrix, "random", params)
+item_scores<-get_item_scores_generator(utility_matrix_old_activity, "random", params)
 rm(params)
 top_X_recommendations<-function(userid, X, ratings_matrix){
   get_top_x_recommendations(userid, X, ratings_matrix, SVD_item_scores)
