@@ -124,25 +124,83 @@ mean(results_df_old$precision.at.5)
 
 ```
 
-```{r old users diversity}
+```{r old users diversity, random}
+
+#random
 params<-list()
 item_scores<-get_item_scores_generator(utility_matrix_old_activity, "random", params)
 rm(params)
 top_X_recommendations<-function(userid, X, ratings_matrix){
-  get_top_x_recommendations(userid, X, ratings_matrix, SVD_item_scores)
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
 }
 
-recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
 filename = "rec_results_random_old.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename)
+
+rm(item_scores)
+rm(top_X_recommendations)
+
+
+#not sure about this code
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_old_activity>0.3)) }
+
+df <- get_df_diversity("rec_results_random_old.csv")
+
+plot_diversity_recsys("rec_results_random_old.csv")
+
+```
+```{r ibcf diversity old}
+#ibcf
+
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix_old_activity, "ibcf", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
+filename = "rec_results_ibcf_old.csv"
 save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
 
 rm(item_scores)
 rm(top_X_recommendations)
 
-plot_diversity_recsys("top_5_10_fold_cv_svd_old.csv")
-plot_diversity_recsys("top_5_10_fold_cv_random_old.csv")
-plot_diversity_recsys("top_5_10_fold_cv_ibcf_old.csv")
-plot_diversity_recsys("top_5_10_fold_cv_cbf_old.csv")
+plot_diversity_recsys("rec_results_ibcf_old.csv")
+
+
+```
+```{r cbf diversity old}
+#cbf
+
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix_old_activity, "cbf", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
+filename = "rec_results_cbf_old.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+
+rm(item_scores)
+rm(top_X_recommendations)
+
+plot_diversity_recsys("rec_results_cbf_old.csv")
 
 ```
 
