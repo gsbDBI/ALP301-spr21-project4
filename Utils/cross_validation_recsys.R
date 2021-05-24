@@ -30,7 +30,7 @@ cross_validation_recsys <- function(utility_matrix, folds, X, type, params, key=
       if (length(index_of_known)>X) {
         recommended <- get_top_x_recommendations(userid, X, train_set, recommender)
         matched=length(intersect(story_ids[stories_removed[[userid]]],recommended))
-        precision_vector[userid]<-(matched/k)
+        precision_vector[userid]<-(matched/X)
         recall_vector[userid]<-(matched/(length(index_of_known)))
         scores<-recommender(userid, train_set)
         scores[is.na(scores)]<-0.0
