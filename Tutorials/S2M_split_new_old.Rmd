@@ -46,13 +46,13 @@ utility_matrix<-utility_mat[,3:num_cols]
 utility_matrix<-utility_matrix[,stories_with_text]
 story_ids<-colnames(utility_matrix)
 
-#filter by number of "0" interactions because the opposite of that is interactions (.3, .5, 1). High 0 number means new user.
+#filter by number of NA interactions because the opposite of that is interactions (.3, .5, 1). High NA number means new user.
 utility_matrix_old_activity <- utility_matrix[ which(rowSums(is.na(utility_matrix))<=1062),]
 utility_matrix_new_activity <- utility_matrix[ which(rowSums(is.na(utility_matrix))>1062),]
 
 #add 0s instead of NAs
-utility_matrix_old_activity[is.na(utility_matrix_old_activity)]<-0.0
-utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.0
+utility_matrix_old_activity[is.na(utility_matrix_old_activity)]<-0.1
+utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.1
 
 
 ```
@@ -60,10 +60,10 @@ utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.0
 ```{r}
 
 #check that filtering is working
-mean(rowSums(utility_matrix_old_activity == 0))
-mean(rowSums(utility_matrix_new_activity == 0))
-summary(rowSums(utility_matrix_old_activity == 0))
-summary(rowSums(utility_matrix_new_activity == 0))
+mean(rowSums(utility_matrix_old_activity == .1))
+mean(rowSums(utility_matrix_new_activity == .1))
+summary(rowSums(utility_matrix_old_activity == .1))
+summary(rowSums(utility_matrix_new_activity == .1))
 
 #making old matrix
 utility_matrix_old_activity<-as.matrix(utility_matrix_old_activity)
