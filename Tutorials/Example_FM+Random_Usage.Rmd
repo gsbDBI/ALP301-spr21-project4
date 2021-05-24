@@ -37,7 +37,6 @@ pacman::p_load(rsparse)
 pacman::p_load(recommenderlab)
 pacman::p_load(reshape2)
 pacman::p_load(ggplot2)
-
 rm(list = ls())
 
 # Note for 2021 data (coverage: 2020-05-01 to 2021-01-31): 
@@ -58,6 +57,7 @@ initialization <- initialize_utility_matrix(utility_mat, story_info, 500)
 
 utility_matrix <- initialization$utility_matrix
 story_ids <- initialization$story_ids
+child_ids <- initialization$child_ids
 
 utils_raw_file <- "Datasets/utils_raw_filter60.csv"
 
@@ -75,8 +75,9 @@ seed_value <- 123
 # Note - below is the list of all parameters we will need to input
 params<-list(raw_matrix=utility_data_raw, story_info=story_info,
              user_info=user_info, story_attr=story_attr, user_attr=user_attr,
-             model_type="gaussian", user_mapping = user_mapping
-             , seed_value = seed_value)
+             model_type="binomial", user_mapping = user_mapping
+             , story_ids = story_ids, child_ids = child_ids,
+             seed_value = seed_value)
 ```
 
 Now to run the code - Factorization Machine
@@ -86,10 +87,10 @@ source("../RecSys/get_item_scores.R", local = knitr::knit_global())
 source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
 FM_item_scores<-get_item_scores_generator(utility_matrix, "fm", params)
 FM_top_X_recommendations<-function(userid, X, utility_matrix, story_ids){
-  get_top_x_recommendations(userid, X, utility_matrix, story_ids, FM_item_scores)
+  get_top_x_recommendations(userid, X, utility_matrix, FM_item_scores)
 }
 
-recs<-FM_top_X_recommendations(10, 5, utility_matrix, story_ids)
+recs<-FM_top_X_recommendations(10, 5, utility_matrix)
 ```
 
 Now to run the code - Random Model
@@ -104,4 +105,72 @@ random_top_X_recommendations<-function(userid, X, utility_matrix, story_ids){
 }
 recs<-random_top_X_recommendations(10, 5, utility_matrix, story_ids)
 recs
+```
+```{r}
+test_function <- fm_get_factorization_matrix(params = params)
+test_scores <- fm_get_item_scores(9, utility_matrix, test_function, params)
+story_ids_test <-as.integer(colnames(utility_matrix))
+# We need to remove items that they already know to from our recommendations.
+user_row<-utility_matrix[10,]
+unknown_stories<-user_row==0
+names_unknown<-story_ids_test[unknown_stories]
+  # unknown_stories_name <- names(unknown_stories[unknown_stories == TRUE])
+  # index <- which(item_scores[unknown_stories_name] >= sort(item_scores[unknown_stories_name], decreasing=T)[X], arr.ind=TRUE)
+index <- which(test_scores[unknown_stories] >= sort(test_scores[unknown_stories], decreasing=T)[5], arr.ind=TRUE)
+
+# Eye test to compare
+sort(test_scores, decreasing = TRUE)  
+names_unknown[index]
+```
+
+```{r}
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
+folds <- 10
+X <- 5 # We will use precision at 5
+type <- "fm"
+params<-list(raw_matrix=utility_data_raw, story_info=story_info,
+             user_info=user_info, story_attr=story_attr, user_attr=user_attr,
+             model_type="binomial", user_mapping = user_mapping
+             , story_ids = story_ids, child_ids = child_ids,
+             seed_value = seed_value)
+cross_validation_recsys(utility_matrix, folds, X, type, params)
+```
+
+```{r}
+train_set <- utility_matrix
+    valid_users <- which(splitfolds == 1)
+    stories_removed <- list()
+    for (userid in valid_users){
+      user <- utility_matrix[userid,]
+      index_of_known <- which(user!=0)
+      if(length(index_of_known)>X){
+        takeout <- sample(1:length(index_of_known),size=min(5, length(index_of_known)))
+        stories_removed[[userid]] <- index_of_known[takeout]
+        train_set[userid, stories_removed[[userid]]] <- 0
+      }
+    }
+    
+recommender <- get_item_scores_generator(utility_matrix, type, params)
+precision_vector<-rep(NA,length(valid_users))
+recall_vector<-rep(NA,length(valid_users))
+rmse_vector<-rep(NA,length(valid_users))
+```
+
+```{r}
+    for (userid in valid_users){
+      user <- utility_matrix[userid,]
+      index_of_known <- which(user!=0)
+      if (length(index_of_known)>X) {
+        recommended <- get_top_x_recommendations(userid, X, train_set, recommender)
+        matched=length(intersect(story_ids[stories_removed[[userid]]],recommended))
+        precision_vector[userid]<-(matched/X)
+        recall_vector[userid]<-(matched/(length(index_of_known)))
+        scores<-recommender(userid, train_set)
+        scores[is.na(scores)]<-0.0
+        rmse<-sqrt(mean((scores-utility_matrix[userid,])^2))
+        rmse_vector[userid]<-rmse
+      }
+    }
+
+test_users <- valid_users[1:10]
 ```

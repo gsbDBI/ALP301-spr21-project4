@@ -33,13 +33,13 @@ pacman::p_load(knitr)
 pacman::p_load(doParallel)
 pacman::p_load(corrplot)
 
-rm(list = ls())
 
 story_info<- read_csv("Datasets/all_story_obs.csv")
 utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
 set.seed(1992)
 rows<-sample(1:nrow(utility_mat),size=5000)
 utility_mat <- utility_mat[rows, ]
+user_mapping <- utility_mat[,1:2]
 
 source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
 initialization <- initialize_utility_matrix(utility_mat, story_info, 500)
