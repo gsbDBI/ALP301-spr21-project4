@@ -98,7 +98,7 @@ utility_matrixRM <- as(test_matrix, "realRatingMatrix")
 ```{r}
 eval_scheme <- recommenderlab::evaluationScheme(utility_matrixRM,
   method = "split",
-  train = 0.7, given = 1, goodRating = 0.3)
+  train = 0.7, given = -1, goodRating = 0.3)
 
 # item-based nearest neighbors using cosine similarity
 IBCF_model <- recommenderlab::Recommender(
