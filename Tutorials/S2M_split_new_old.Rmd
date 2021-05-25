@@ -81,21 +81,56 @@ source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
 source("../Utils/save_recommender_results.R", local = knitr::knit_global())
 source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
 source("../Utils/test_all_but_k.R", local = knitr::knit_global())
+source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
 ```
+
+```{r FM set-up}
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+set.seed(1992)
+rows<-sample(1:nrow(utility_mat),size=5000)
+utility_mat <- utility_mat[rows, ]
+user_mapping <- utility_mat[,1:2]
+source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
+initialization <- initialize_utility_matrix(utility_mat, story_info, 500)
+utility_matrix <- initialization$utility_matrix
+story_ids <- initialization$story_ids
+child_ids <- initialization$child_ids
+utils_raw_file <- "Datasets/utils_raw_filter60.csv"
+# read story/user characteristics
+story_info<- read_csv("Datasets/all_story_obs.csv")
+user_info <- read_csv("Datasets/user_interests.csv")
+# read child-story interaction data
+utility_data_raw<-read_csv(utils_raw_file,col_types = cols(.default = col_double()))
+story_attr <- c("totpage","wordcount","story_id_code","n_people")
+user_attr <- c("i_Life_skills","grade", "user_id")
+seed_value <- 123
+# Note - below is the list of all parameters we will need to input
+params<-list(raw_matrix=utility_data_raw, story_info=story_info,
+             user_info=user_info, story_attr=story_attr, user_attr=user_attr,
+             model_type="binomial", user_mapping = user_mapping
+             , story_ids = story_ids, child_ids = child_ids,
+             seed_value = seed_value)
+```
+
 
 # ANALYSIS
 
 OLD USERS
 
 ```{r old users create recs}
-types <- c("ubcf", "random", "cbf", "svd", "ibcf")
+types <- c( "svd", "cbf", "ubcf", "random", "ibcf")
 
 params <- list(ibcf=list(),
                ubcf=list(),
                cbf=list(story_info=story_info, story_ids=story_ids),
                svd=list(d=20),
                random = list(),
-               fm=list(story_info=story_info, story_ids=story_ids))
+               fm=list(raw_matrix=utility_data_raw, story_info=story_info,
+             user_info=user_info, story_attr=story_attr, user_attr=user_attr,
+             model_type="binomial", user_mapping = user_mapping
+             , story_ids = story_ids, child_ids = child_ids,
+             seed_value = seed_value))
 
 for (type in types) {
   cat("Type: ", type, "\n")
