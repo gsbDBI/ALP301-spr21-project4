@@ -3,10 +3,10 @@
 # Created by: juan
 # Created on: 5/8/21
 
-initialize_utility_matrix<-function(utility_mat, story_info, num_cols=2527, fill_zero=1) {
+initialize_utility_matrix<-function(utility_mat, story_info, num_cols=2527, fill_zero=TRUE) {
   child_ids<-as.integer(utility_mat$child_id_code)
   story_ids<-as.integer(colnames(utility_mat[,3:num_cols]))
-  if(fill_zero == 1){
+  if(fill_zero){
     utility_mat[is.na(utility_mat)]<-0.0
   } 
   

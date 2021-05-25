@@ -31,6 +31,7 @@ pacman::p_load(stargazer)
 pacman::p_load(knitr)
 pacman::p_load(doParallel)
 pacman::p_load(corrplot)
+pacman::p_load(rsparse)
 
 rm(list = ls())
 
@@ -47,8 +48,10 @@ utility_matrix<-utility_matrix[,stories_with_text]
 story_ids<-colnames(utility_matrix)
 
 #filter by number of NA interactions because the opposite of that is interactions (.3, .5, 1). High NA number means new user.
-utility_matrix_old_activity <- utility_matrix[ which(rowSums(is.na(utility_matrix))<=1062),]
-utility_matrix_new_activity <- utility_matrix[ which(rowSums(is.na(utility_matrix))>1062),]
+index_old_activity = which(rowSums(is.na(utility_matrix))<=1062)
+index_new_activity = which(rowSums(is.na(utility_matrix))>1062)
+utility_matrix_old_activity <- utility_matrix[index_old_activity,]
+utility_matrix_new_activity <- utility_matrix[index_new_activity,]
 
 #add 0s instead of NAs
 utility_matrix_old_activity[is.na(utility_matrix_old_activity)]<-0.1
@@ -71,7 +74,7 @@ utility_matrix_old_activity<-as.matrix(utility_matrix_old_activity)
 #making new matrix
 utility_matrix_new_activity<-as.matrix(utility_matrix_new_activity)
 
-rm(utility_mat)  # this variable is no longer needed
+# rm(utility_mat)  # this variable is no longer needed
 ```
 
 ```{r}
@@ -84,21 +87,21 @@ source("../Utils/test_all_but_k.R", local = knitr::knit_global())
 source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
 ```
 
-```{r FM set-up}
-story_info<- read_csv("Datasets/all_story_obs.csv")
-utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+```{r FM set-up, message = FALSE, warning = FALSE}
+# story_info<- read_csv("Datasets/all_story_obs.csv")
+# utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
 set.seed(1992)
-rows<-sample(1:nrow(utility_mat),size=5000)
-utility_mat <- utility_mat[rows, ]
+# rows<-sample(1:nrow(utility_mat),size=5000)
+# utility_mat <- utility_mat[rows, ]
 user_mapping <- utility_mat[,1:2]
-source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
-initialization <- initialize_utility_matrix(utility_mat, story_info, 500)
-utility_matrix <- initialization$utility_matrix
-story_ids <- initialization$story_ids
-child_ids <- initialization$child_ids
+# source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
+# initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols=500)
+# utility_matrix <- initialization$utility_matrix
+# story_ids <- initialization$story_ids
+# child_ids <- initialization$child_ids
 utils_raw_file <- "Datasets/utils_raw_filter60.csv"
 # read story/user characteristics
-story_info<- read_csv("Datasets/all_story_obs.csv")
+# story_info<- read_csv("Datasets/all_story_obs.csv")
 user_info <- read_csv("Datasets/user_interests.csv")
 # read child-story interaction data
 utility_data_raw<-read_csv(utils_raw_file,col_types = cols(.default = col_double()))
@@ -106,11 +109,13 @@ story_attr <- c("totpage","wordcount","story_id_code","n_people")
 user_attr <- c("i_Life_skills","grade", "user_id")
 seed_value <- 123
 # Note - below is the list of all parameters we will need to input
-params<-list(raw_matrix=utility_data_raw, story_info=story_info,
+params_fm<-list(raw_matrix=utility_data_raw, story_info=story_info,
              user_info=user_info, story_attr=story_attr, user_attr=user_attr,
              model_type="binomial", user_mapping = user_mapping
              , story_ids = story_ids, child_ids = child_ids,
              seed_value = seed_value)
+
+rm(utility_mat)
 ```
 
 
@@ -126,13 +131,9 @@ params <- list(ibcf=list(),
                cbf=list(story_info=story_info, story_ids=story_ids),
                svd=list(d=20),
                random = list(),
-               fm=list(raw_matrix=utility_data_raw, story_info=story_info,
-             user_info=user_info, story_attr=story_attr, user_attr=user_attr,
-             model_type="binomial", user_mapping = user_mapping
-             , story_ids = story_ids, child_ids = child_ids,
-             seed_value = seed_value))
+               fm=params_fm)
 
-for (type in types) {
+for (type in c("fm", "cbf")) {
   cat("Type: ", type, "\n")
   cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
                                    folds=10, X=5, type=type, key="old", params=params[[type]])
