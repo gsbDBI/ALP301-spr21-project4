@@ -88,13 +88,14 @@ source("../Utils/test_all_but_k.R", local = knitr::knit_global())
 OLD USERS
 
 ```{r old users create recs}
-types <- c("random", "cbf", "svd", "ibcf")
+types <- c("ubcf", "random", "cbf", "svd", "ibcf")
 
 params <- list(ibcf=list(),
                ubcf=list(),
                cbf=list(story_info=story_info, story_ids=story_ids),
                svd=list(d=20),
-               random = list())
+               random = list(),
+               fm=list(story_info=story_info, story_ids=story_ids))
 
 for (type in types) {
   cat("Type: ", type, "\n")
@@ -151,10 +152,10 @@ get_df_diversity<-function(filename){
   index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
   index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
     
-  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]>0.3)
-  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]>0.3)
+  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]!=0.1)
+  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]!=0.1)
     
-  readers_per_story <- (colSums(utility_matrix_old_activity>0.3)) }
+  readers_per_story <- (colSums(utility_matrix_old_activity!=0.1)) }
 
 df <- get_df_diversity("rec_results_random_old.csv")
 
@@ -185,10 +186,10 @@ get_df_diversity<-function(filename){
   index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
   index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
     
-  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]>0.3)
-  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]>0.3)
+  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]!=.1)
+  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]!=.1)
     
-  readers_per_story <- (colSums(utility_matrix_old_activity>0.3)) }
+  readers_per_story <- (colSums(utility_matrix_old_activity!=.1)) }
 
 df <- get_df_diversity("rec_results_ibcf_old.csv")
 
@@ -221,10 +222,10 @@ get_df_diversity<-function(filename){
   index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
   index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
     
-  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]>0.3)
-  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]>0.3)
+  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]!=.1)
+  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]!=.1)
     
-  readers_per_story <- (colSums(utility_matrix_old_activity>0.3)) }
+  readers_per_story <- (colSums(utility_matrix_old_activity!=.1)) }
 
 df <- get_df_diversity("rec_results_cbf_old.csv")
 
@@ -257,10 +258,10 @@ get_df_diversity<-function(filename){
   index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
   index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
     
-  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]>0.3)
-  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]>0.3)
+  popularity_ones <- colSums(utility_matrix_old_activity[, index_results_one]!=.1)
+  popularity_fives <- colSums(utility_matrix_old_activity[, index_results_five]!=.1)
     
-  readers_per_story <- (colSums(utility_matrix_old_activity>0.3)) }
+  readers_per_story <- (colSums(utility_matrix_old_activity!=.1)) }
 
 df <- get_df_diversity("rec_results_svd_old.csv")
 
@@ -278,7 +279,7 @@ plot_diversity_recsys(filename = "rec_results_svd_old.csv", ratings_matrix = uti
 NEW USERS
 
 ```{r new users create recs}
-types <- c("random", "ibcf", "cbf", "svd")
+types <- c("ubcf", "random", "ibcf", "cbf", "svd")
 
 params <- list(ibcf=list(),
                ubcf=list(),
@@ -312,14 +313,6 @@ ggplot(data = results_df_new) +
                            size=rmse, 
                            color=type))
 
-random_rmse <- rmse_vector[1]
-random_rmse
-ibcf_rmse <- rmse_vector[2]
-ibcf_rmse
-cbf_rmse<- rmse_vector[3]
-cbf_rmse
-svd_rmse<- rmse_vector[4]
-svd_rmse
 ```
 
 ```{r new users diversity}
