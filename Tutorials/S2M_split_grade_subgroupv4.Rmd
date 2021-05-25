@@ -1,0 +1,585 @@
+---
+title: "S2M_Split_into_new_old"
+output: html_document
+    highlight: haddock
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+date: "April 2021"
+---
+
+```{r, message = FALSE, warning = FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse)
+pacman::p_load(here)
+pacman::p_load(lmtest)
+pacman::p_load(glue)
+pacman::p_load(broom)
+pacman::p_load(ri2)
+pacman::p_load(margins)
+pacman::p_load(glmnet) 
+pacman::p_load(kableExtra)
+pacman::p_load(stargazer)
+pacman::p_load(knitr)
+pacman::p_load(doParallel)
+pacman::p_load(corrplot)
+rm(list = ls())
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
+initialization <- initialize_utility_matrix(utility_mat, story_info)
+utility_matrix <- initialization$utility_matrix
+story_ids <- initialization$story_ids
+child_ids <- initialization$child_ids
+```
+```{r, message = FALSE, warning = FALSE}
+child_info <- read_csv("Datasets/child.csv")
+child_id_mapping <- read_csv("Datasets/child_mapping.csv")
+child_grade <- left_join(child_info, child_id_mapping, by = "child_id") %>% 
+  filter(child_id_code %in% child_ids) %>% select(child_id_code, grade)
+pre_users <- child_grade %>% filter(grade %in% c("Nursery", "Junior KG", "Senior KG")) %>%
+  select(child_id_code) %>% arrange(child_id_code)
+mid_users <- child_grade %>% filter(grade %in% c("Grade 1", "Grade 2", "Grade 3")) %>%
+  select(child_id_code) %>% arrange(child_id_code)
+old_users <- child_grade %>% filter(grade %in% c("Grade 4", "Grade 5", "Grade 6")) %>%
+  select(child_id_code) %>% arrange(child_id_code)
+```
+```{r}
+
+user_id <- utility_mat$child_id_code
+index_pre <- which(user_id %in% pre_users$child_id_code)
+utility_matrix_pre <- utility_matrix[index_pre, ]
+index_1_3 <- which(user_id %in% mid_users$child_id_code)
+utility_matrix_1_3 <- utility_matrix[index_1_3, ]
+index_4_6 <- which(user_id %in% old_users$child_id_code)
+utility_matrix_4_6 <- utility_matrix[index_4_6, ]
+
+dim(utility_matrix)
+dim(utility_matrix_pre)
+dim(utility_matrix_1_3)
+dim(utility_matrix_4_6)
+
+
+#add 0s instead of NAs
+utility_matrix_pre[is.na(utility_matrix_pre)]<-0.0
+utility_matrix_1_3[is.na(utility_matrix_1_3)]<-0.0
+utility_matrix_4_6[is.na(utility_matrix_4_6)]<-0.0
+
+```
+
+```{r}
+
+#check that filtering is working
+mean(rowSums(utility_matrix_pre == 0))
+mean(rowSums(utility_matrix_1_3 == 0))
+mean(rowSums(utility_matrix_4_6 == 0))
+summary(rowSums(utility_matrix_pre == 0))
+summary(rowSums(utility_matrix_1_3 == 0))
+summary(rowSums(utility_matrix_4_6 == 0))
+
+
+```
+
+```{r}
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
+source("../Utils/save_recommender_results.R", local = knitr::knit_global())
+source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
+source("../Utils/test_all_but_k.R", local = knitr::knit_global())
+```
+
+#UBCF ANALYSIS
+
+PRE-SCHOOL USERS
+
+```{r pre users create recs}
+types <- c("random","cbf", "svd", "ibcf")
+
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20),
+                random = list())
+
+for (type in types) {
+  cat("Type: ", type, "\n")
+  cross_validation_recsys(utility_matrix=utility_matrix_pre,
+                                   folds=10, X=5, type=type, key="pre", params=params[[type]])
+}
+
+```
+
+```{r}
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_pre.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results_df_pre <- tibble(type=types, usage="pre", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df_pre) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type))
+
+mean(results_df_pre$precision.at.5)
+
+```
+
+```{r pre users diversity, random}
+
+#random
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix_pre, "random", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_pre, X=10)
+filename = "rec_results_random_pre.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_pre[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_pre[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_pre>0.3)) }
+df <- get_df_diversity("rec_results_random_pre.csv")
+plot_diversity_recsys(filename = "rec_results_random_pre.csv", ratings_matrix = utility_matrix_pre)
+```
+
+```{r ibcf diversity pre}
+#ibcf
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix_pre, "ibcf", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_pre, X=10)
+filename = "rec_results_ibcf_pre.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_pre[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_pre[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_pre>0.3)) }
+df <- get_df_diversity("rec_results_ibcf_pre.csv")
+plot_diversity_recsys(filename = "rec_results_ibcf_pre.csv", ratings_matrix = utility_matrix_pre)
+```
+
+```{r cbf diversity pre}
+#cbf
+params<- list(story_info=story_info, story_ids=story_ids)
+item_scores<-get_item_scores_generator(utility_matrix_pre, "cbf", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_pre, X=10)
+filename = "rec_results_cbf_pre.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_pre[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_pre[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_pre>0.3)) }
+df <- get_df_diversity("rec_results_cbf_pre.csv")
+plot_diversity_recsys(filename = "rec_results_cbf_pre.csv", ratings_matrix = utility_matrix_pre)
+```
+```{r svd diversity pre}
+#svd
+params<-list(d=20)
+item_scores<-get_item_scores_generator(utility_matrix_pre, "svd", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_pre, X=10)
+filename = "rec_results_svd_pre.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_pre[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_pre[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_pre>0.3)) }
+df <- get_df_diversity("rec_results_svd_pre.csv")
+plot_diversity_recsys(filename = "rec_results_svd_pre.csv", ratings_matrix = utility_matrix_pre)
+```
+
+
+
+```{r pre users engagement metric}
+
+```
+
+GRADE 1 - 3 USERS
+
+```{r 1_3 users create recs}
+types <- c("random","cbf", "svd", "ibcf")
+
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20),
+                random = list())
+
+for (type in types) {
+  cat("Type: ", type, "\n")
+  cross_validation_recsys(utility_matrix=utility_matrix_1_3,
+                                   folds=10, X=5, type=type, key="1_3", params=params[[type]])
+}
+
+```
+
+```{r new users all-but-k evaluation}
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_1_3.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results_df_1_3 <- tibble(type=types, usage="new", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df_1_3) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           #size=rmse#, 
+                           color=type))
+
+mean(results_df_1_3$precision.at.5)
+```
+
+
+
+```{r 1_3 users diversity, random}
+
+#random
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix_1_3, "random", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_1_3, X=10)
+filename = "rec_results_random_1_3.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_1_3[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_1_3[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_1_3>0.3)) }
+df <- get_df_diversity("rec_results_random_1_3.csv")
+plot_diversity_recsys(filename = "rec_results_random_1_3.csv", ratings_matrix = utility_matrix_1_3)
+```
+
+```{r ibcf diversity 1_3}
+#ibcf
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix_1_3, "ibcf", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_1_3, X=10)
+filename = "rec_results_ibcf_1_3.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_1_3[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_1_3[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_1_3>0.3)) }
+df <- get_df_diversity("rec_results_ibcf_1_3.csv")
+plot_diversity_recsys(filename = "rec_results_ibcf_1_3.csv", ratings_matrix = utility_matrix_1_3)
+```
+
+```{r cbf diversity 1_3}
+#cbf
+params<- list(story_info=story_info, story_ids=story_ids)
+item_scores<-get_item_scores_generator(utility_matrix_1_3, "cbf", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_1_3, X=10)
+filename = "rec_results_cbf_1_3.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_1_3[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_1_3[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_1_3>0.3)) }
+df <- get_df_diversity("rec_results_cbf_1_3.csv")
+plot_diversity_recsys(filename = "rec_results_cbf_1_3.csv", ratings_matrix = utility_matrix_1_3)
+```
+```{r svd diversity 1_3}
+#svd
+params<-list(d=20)
+item_scores<-get_item_scores_generator(utility_matrix_1_3, "svd", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_1_3, X=10)
+filename = "rec_results_svd_1_3.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_1_3[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_1_3[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_1_3>0.3)) }
+df <- get_df_diversity("rec_results_svd_1_3.csv")
+plot_diversity_recsys(filename = "rec_results_svd_1_3.csv", ratings_matrix = utility_matrix_1_3)
+```
+
+```{r 1_3 engagement metric}
+
+```
+GRADE 4 - 6 USERS
+
+```{r 4_6 users create recs}
+types <- c("random","cbf", "svd", "ibcf")
+
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20),
+                random = list())
+
+for (type in types) {
+  cat("Type: ", type, "\n")
+  cross_validation_recsys(utility_matrix=utility_matrix_4_6,
+                                   folds=10, X=5, type=type, key="4_6", params=params[[type]])
+}
+
+```
+
+```{r new users all-but-k evaluation}
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_4_6.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results_df_4_6 <- tibble(type=types, usage="new", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df_4_6) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           #size=rmse#, 
+                           color=type))
+
+mean(results_df_4_6$precision.at.5)
+```
+
+```{r 4_6 users diversity, random}
+
+#random
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix_4_6, "random", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_4_6, X=10)
+filename = "rec_results_random_4_6.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_4_6[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_4_6[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_4_6>0.3)) }
+df <- get_df_diversity("rec_results_random_4_6.csv")
+plot_diversity_recsys(filename = "rec_results_random_4_6.csv", ratings_matrix = utility_matrix_4_6)
+```
+
+```{r ibcf diversity 4_6}
+#ibcf
+params<-list()
+item_scores<-get_item_scores_generator(utility_matrix_4_6, "ibcf", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_4_6, X=10)
+filename = "rec_results_ibcf_4_6.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_4_6[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_4_6[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_4_6>0.3)) }
+df <- get_df_diversity("rec_results_ibcf_4_6.csv")
+plot_diversity_recsys(filename = "rec_results_ibcf_4_6.csv", ratings_matrix = utility_matrix_4_6)
+```
+
+```{r cbf diversity 4_6}
+#cbf
+params<- list(story_info=story_info, story_ids=story_ids)
+item_scores<-get_item_scores_generator(utility_matrix_4_6, "cbf", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_4_6, X=10)
+filename = "rec_results_cbf_4_6.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_4_6[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_4_6[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_4_6>0.3)) }
+df <- get_df_diversity("rec_results_cbf_4_6.csv")
+plot_diversity_recsys(filename = "rec_results_cbf_4_6.csv", ratings_matrix = utility_matrix_4_6)
+```
+```{r svd diversity 4_6}
+#svd
+params<-list(d=20)
+item_scores<-get_item_scores_generator(utility_matrix_4_6, "svd", params)
+rm(params)
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+recommender_fun_args <- list(ratings_matrix=utility_matrix_4_6, X=10)
+filename = "rec_results_svd_4_6.csv"
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+rm(item_scores)
+rm(top_X_recommendations)
+get_df_diversity<-function(filename){
+  recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
+  recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()
+  recommender_results_item_five <- recommender_results %>% filter(item_rank <= 5) %>% select(story_id) %>% unique()
+    
+  index_results_one <- which(recommender_results_item_one$story_id %in% story_ids)
+  index_results_five <- which(recommender_results_item_five$story_id %in% story_ids)
+    
+  popularity_ones <- colSums(utility_matrix_4_6[, index_results_one]>0.3)
+  popularity_fives <- colSums(utility_matrix_4_6[, index_results_five]>0.3)
+    
+  readers_per_story <- (colSums(utility_matrix_4_6>0.3)) }
+df <- get_df_diversity("rec_results_svd_4_6.csv")
+plot_diversity_recsys(filename = "rec_results_svd_4_6.csv", ratings_matrix = utility_matrix_4_6)
+```
+
+
+
+```{r 4_6 engagement metric}
+
+```
+ 
