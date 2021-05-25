@@ -22,7 +22,7 @@ test_all_but_k<-function(k, ratings_matrix, type, params=list(), num_rows=NaN){
   if(!update_similarity) get_item_scores <- get_item_scores_generator(ratings_matrix, type, params)
   for (userid in 1:num_rows){
     user<-ratings_matrix[userid,]
-    index_of_known<-which(user!=0)
+    index_of_known<-which(user!=.1)
     if(length(index_of_known)>k){
       takeout<-sample(1:length(index_of_known),size=k)
       stories_removed<-index_of_known[takeout]

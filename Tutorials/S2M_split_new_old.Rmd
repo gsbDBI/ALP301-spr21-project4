@@ -124,7 +124,7 @@ rm(utility_mat)
 OLD USERS
 
 ```{r old users create recs}
-types <- c( "svd", "cbf", "ubcf", "random", "ibcf")
+types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
 
 params <- list(ibcf=list(),
                ubcf=list(),
@@ -133,7 +133,7 @@ params <- list(ibcf=list(),
                random = list(),
                fm=params_fm)
 
-for (type in c("fm", "cbf")) {
+for (type in types) {
   cat("Type: ", type, "\n")
   cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
                                    folds=10, X=5, type=type, key="old", params=params[[type]])

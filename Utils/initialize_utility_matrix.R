@@ -7,7 +7,7 @@ initialize_utility_matrix<-function(utility_mat, story_info, num_cols=2527, fill
   child_ids<-as.integer(utility_mat$child_id_code)
   story_ids<-as.integer(colnames(utility_mat[,3:num_cols]))
   if(fill_zero){
-    utility_mat[is.na(utility_mat)]<-0.0
+    utility_mat[is.na(utility_mat)]<-0.1
   } 
   
   stories_with_text<-(story_ids %in% story_info$story_id_code)
