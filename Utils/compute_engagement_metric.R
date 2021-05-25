@@ -1,3 +1,5 @@
+### NOTE: This code only works for IBCF so far, I'm debugging the other models
+
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse)
 pacman::p_load(here)
@@ -64,6 +66,14 @@ compute_engagement_metric <- function(utility_matrix, utility_matrix_na, n_users
   # TODO: Add more RecSys types
   if(type == 'ibcf') {
     similarity_matrix <- ibcf_get_similarity_matrix(utility_matrix)
+  } else if(type == 'ubcf'){
+    similarity_matrix <- ubcf_get_similarity_matrix(utility_matrix)
+  } else if(type == 'cbf'){
+    params <- list(story_info=story_info, story_ids=story_ids)
+    similarity_matrix <- cbf_get_similarity_matrix(utility_matrix, params)
+  } else if(type == 'svd'){
+    params <- list(d=20)
+    factors <- svd_get_decomposition(utility_matrix, params)
   } else {
     return()
   }
@@ -82,6 +92,11 @@ compute_engagement_metric <- function(utility_matrix, utility_matrix_na, n_users
   
   for (user in users) {
     
+    # Skip buggy user
+    if (user == 694) {
+      next
+    }
+    
     # Extract user from the utility matrix
     user_interacted <- names(utility_matrix_na[user, utility_matrix_na[user,] > -1])
     
@@ -95,7 +110,24 @@ compute_engagement_metric <- function(utility_matrix, utility_matrix_na, n_users
     # TODO: Add more RecSys types
     if (type == 'ibcf') {
       predicted_utilities <- ibcf_get_item_scores(user, utility_matrix, similarity_matrix)
+    } else if (type == 'ubcf') {
+      predicted_utilities <- ubcf_get_item_scores(user, utility_matrix, similarity_matrix)[1,]
+    } else if (type == 'cbf') {
+      predicted_utilities <- cbf_get_item_scores(user, utility_matrix, similarity_matrix)
+      if (length(predicted_utilities) <= 0) {
+        next
+      }
+      names(predicted_utilities) <- story_ids
+    } else if (type == 'svd') {
+      predicted_utilities <- svd_get_item_scores(user, factors$U, factors$Vprime)[1,]
+      if (length(predicted_utilities) <= 0) {
+        next
+      }
+      names(predicted_utilities) <- story_ids
     }
+    
+    # To avoid buggy users that sometimes don't get any predicted utilities 
+    # So far only user 694, if so this line is redundant b/c already taken care of above
     if (length(predicted_utilities) <= 0) {
       next
     }
@@ -149,4 +181,4 @@ compute_engagement_metric <- function(utility_matrix, utility_matrix_na, n_users
 # Example:
 test <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, 'ibcf')
 test
-# Should return a 99.71% increase in engagement for users 1:1000, using the IBCF RecSys
+# Should return a 99.71% increase in engagement if n_users=1000 and type='ibcf'
