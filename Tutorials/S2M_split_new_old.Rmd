@@ -355,13 +355,14 @@ plot_diversity_recsys(filename = "rec_results_ubcf_old.csv", ratings_matrix = ut
 NEW USERS
 
 ```{r new users create recs}
-types <- c("ubcf", "random", "ibcf", "cbf", "svd")
+types <- c("fm", "ubcf", "random", "ibcf", "cbf", "svd")
 
 params <- list(ibcf=list(),
                ubcf=list(),
                cbf=list(story_info=story_info, story_ids=story_ids),
                svd=list(d=20),
-               random=list())
+               random=list(), 
+               fm=params_fm)
 
 for (type in types) {
   cat("Type: ", type, "\n")
