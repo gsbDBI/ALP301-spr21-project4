@@ -11,11 +11,11 @@ cross_validation_recsys <- function(utility_matrix, folds, X, type, params, key=
     stories_removed <- list()
     for (userid in valid_users){
       user <- utility_matrix[userid,]
-      index_of_known <- which(user!=0)
+      index_of_known <- which(user!=.1)
       if(length(index_of_known)>X){
         takeout <- sample(1:length(index_of_known),size=min(X, length(index_of_known)))
         stories_removed[[userid]] <- index_of_known[takeout]
-        train_set[userid, stories_removed[[userid]]] <- 0
+        train_set[userid, stories_removed[[userid]]] <- .1
       }
     }
     
@@ -26,14 +26,14 @@ cross_validation_recsys <- function(utility_matrix, folds, X, type, params, key=
     
     for (userid in valid_users){
       user <- utility_matrix[userid,]
-      index_of_known <- which(user!=0)
+      index_of_known <- which(user!=.1)
       if (length(index_of_known)>X) {
         recommended <- get_top_x_recommendations(userid, X, train_set, recommender)
         matched=length(intersect(story_ids[stories_removed[[userid]]],recommended))
         precision_vector[userid]<-(matched/X)
         recall_vector[userid]<-(matched/(length(index_of_known)))
         scores<-recommender(userid, train_set)
-        scores[is.na(scores)]<-0.0
+        scores[is.na(scores)]<-0.1
         rmse<-sqrt(mean((scores-utility_matrix[userid,])^2))
         rmse_vector[userid]<-rmse
       }
