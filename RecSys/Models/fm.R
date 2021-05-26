@@ -63,7 +63,7 @@ fm_get_factorization_matrix<-function(params){
 
 fm_get_item_scores <- function(userid, ratings_matrix, fm_model_prediction, params){
   # User Index Position
-  user_index <- params$user_mapping$child_id_code[params$user_mapping$X1 == userid]
+  user_index <- params$user_mapping$child_id_code[userid]
   
   prediction_values <- fm_model_prediction$preds[fm_model_prediction$user_id==user_index]
   story_positions <- fm_model_prediction$story_id_code[fm_model_prediction$user_id==user_index]
