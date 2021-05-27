@@ -28,7 +28,7 @@ cross_validation_recsys <- function(utility_matrix, folds, X, type, params, key=
       user <- utility_matrix[userid,]
       index_of_known <- which(user!= unknown_value)
       if (length(index_of_known)>X) {
-        recommended <- get_top_x_recommendations(userid, X, train_set, recommender)
+        recommended <- get_top_x_recommendations(userid, X, train_set, recommender, unknown_value)
         matched=length(intersect(story_ids[stories_removed[[userid]]],recommended))
         precision_vector[userid]<-(matched/X)
         recall_vector[userid]<-(matched/(length(index_of_known)))
