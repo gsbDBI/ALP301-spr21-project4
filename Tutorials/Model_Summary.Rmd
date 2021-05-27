@@ -54,9 +54,10 @@ utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.defau
 rows<-sample(1:nrow(utility_mat),size=5000)
 utility_mat <- utility_mat[rows,]
 num_cols <- 2527
+unknown_value <- 0.1
 
 # Set overall utility matrix
-initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols, fill_zero <- 0.0)
+initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols, fill_zero <- unknown_value)
 utility_matrix <- initialization$utility_matrix
 story_ids <- initialization$story_ids
 child_ids <- initialization$child_ids
@@ -67,7 +68,6 @@ utility_matrix_na <- na_initialization$utility_matrix
 
 # Create parameters for FM
 params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
-
 ```
 
 # ANALYSIS
@@ -86,9 +86,8 @@ fm=params_fm)
 for (type in types) {
 cat("Type: ", type, "\n")
 cross_validation_recsys(utility_matrix=utility_matrix,
-folds=10, X=5, type=type, key="overall", params=params[[type]])
+folds=10, X=5, type=type, key="overall", params=params[[type]], unknown_value)
 }
-
 
 precision_vector<-rep(NA,length(types))
 recall_vector<-rep(NA,length(types))
@@ -114,14 +113,14 @@ for (type in types){
 
 item_scores<-get_item_scores_generator(utility_matrix, type, params[[type]])
 top_X_recommendations<-function(userid, X, ratings_matrix){
-  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores, unknown_value)
 }
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
 filename <- paste("rec_results_",type,"_overall.csv", sep = "")
 save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
 
-df <- get_df_diversity(filename = filename, utility_matrix, unknown_value = 0.0)
+df <- get_df_diversity(filename = filename, utility_matrix, unknown_value)
 assign(paste(type,"_df",sep = ""), df)
 }
 
@@ -149,27 +148,29 @@ engagement_total <- rbind(engagement_total, engagement_df)
 ```
 
 
-```{r simulation skeleton}
-set.seed(123)
-
-for (i in 1:2){
-story_info<- read_csv("Datasets/all_story_obs.csv")
-utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
-rows<-sample(1:nrow(utility_mat),size=3000)
-utility_mat <- utility_mat[rows,]
-num_cols <- 2527
-
-# Set overall utility matrix
-initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols, fill_zero <- 0.0)
-utility_matrix <- initialization$utility_matrix
-story_ids <- initialization$story_ids
-child_ids <- initialization$child_ids
-
-# Create parameters for FM
-params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
+```{r determine best SVD value}
+# set.seed(123)
+# 
+# for (i in 1:2){
+# story_info<- read_csv("Datasets/all_story_obs.csv")
+# utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+# rows<-sample(1:nrow(utility_mat),size=3000)
+# utility_mat <- utility_mat[rows,]
+# num_cols <- 2527
+# 
+# # Set overall utility matrix
+# initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols, fill_zero <- 0.0)
+# utility_matrix <- initialization$utility_matrix
+# story_ids <- initialization$story_ids
+# child_ids <- initialization$child_ids
+# 
+# # Create parameters for FM
+# params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
   
 # Run Analysis  
 types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
+svd_param_list <- c(2,4,8,12,20,30,50)
+# svd_param_list <- c(2,4)
 
 params <- list(ibcf=list(),
 ubcf=list(),
@@ -178,30 +179,37 @@ svd=list(d=20),
 random = list(),
 fm=params_fm)
 
-for (type in types) {
-cat("Type: ", type, "\n")
+for (val in svd_param_list) {
+cat("Value:", val, "\n")
 cross_validation_recsys(utility_matrix=utility_matrix,
-folds=10, X=5, type=type, key="overall", params=params[[type]])
+folds=10, X=5, type="svd", key=paste(val), params=list(d=val), unknown_value)
 }
 
+for (val in svd_param_list){
+  precision_vector<-rep(NA,1)
+  recall_vector<-rep(NA,1)
+  rmse_vector<-rep(NA,1)
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_svd_",val,".csv", sep = ""))
+  precision_vector[1] <- weighted.mean(results_type$precision.at.5, results_type$n)
+  recall_vector[1] <- weighted.mean(results_type$recall.at.5, results_type$n)
+  rmse_vector[1] <- weighted.mean(results_type$rmse, results_type$n)
+  
+  results_df <- tibble(type="svd", usage=val, precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
-precision_vector<-rep(NA,length(types))
-recall_vector<-rep(NA,length(types))
-rmse_vector<-rep(NA,length(types))
-for (k in 1:length(types)) {
-results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_overall.csv", sep = ""))
-precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
-recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
-rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+  if(val == svd_param_list[1]){
+  results_total <- results_df[FALSE,]
+  }
+  results_total <- rbind(results_total, results_df)
 }
+# }
 
-results_df <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector, i)
+ggplot(data = results_total) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=usage))
 
-if(i == 1){
-results_total <- results_df[FALSE,]
-}
-results_total <- rbind(results_total, results_df)
-}
+```
+
+```{r}
 
 ```
 
