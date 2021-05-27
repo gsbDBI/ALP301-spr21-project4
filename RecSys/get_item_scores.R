@@ -73,7 +73,7 @@ get_item_scores_generator<-function(utility_matrix, type, params=list()) {
     similarity_matrix_item <- ibcf_get_similarity_matrix(utility_matrix)
 
     if(run_source_svd) source(paste(path, "/Models/svd.R", sep=""), local = knitr::knit_global())
-    factors <- svd_get_decomposition(utility_matrix, d=20) # Made parameters explicit
+    factors <- svd_get_decomposition(utility_matrix, list(d=20)) # Made parameters explicit
 
     return(
       function(userid, ratings_matrix) {

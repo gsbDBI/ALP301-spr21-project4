@@ -33,6 +33,7 @@ pacman::p_load(doParallel)
 pacman::p_load(corrplot)
 pacman::p_load(rsparse)
 pacman::p_load(sqldf)
+pacman::p_load(gridExtra)
 
 rm(list = ls())
 
@@ -74,8 +75,8 @@ params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
 
 ```{r analysis}
 # Run Analysis  
-# types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all models except ensemble
-types <- c("ensemble") # Use for ensemble
+types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all models except ensemble
+# types <- c("ensemble") # Use for ensemble
 
 params <- list(ibcf=list(),
 ubcf=list(),
@@ -88,8 +89,8 @@ ensemble=list()) # NEW
 for (type in types) {
 cat("Type: ", type, "\n")
 cross_validation_recsys(utility_matrix=utility_matrix,
-# folds=10, X=5, type=type, key="overall", params=params[[type]]) # Use for all models except ensemble
-folds=10, X=5, type=type, key="overall", params=list()) # Use for ensemble
+folds=10, X=5, type=type, key="overall", params=params[[type]]) # Use for all models except ensemble
+# folds=10, X=5, type=type, key="overall", params=list()) # Use for ensemble
 }
 
 
@@ -110,9 +111,173 @@ ggplot(data = results_df) +
                            size=rmse, color=type))
 ```
 
-```{r}
+```{r results df}
 results_df
 ```
+
+# JOHANNA'S NEW CODE STARTS HERE
+# SUBGROUP ANALYSIS
+
+```{r subgroup matrices}
+
+# CODE COPIED FROM LIBBY'S S2M_split_new_old.Rmd
+
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+num_cols <- 2527
+child_ids<-as.integer(utility_mat$child_id_code)
+story_ids<-as.integer(colnames(utility_mat[,3:num_cols]))
+
+#filter down from 2500+ stories to 1087 stories we have info on
+stories_with_text<-(story_ids %in% story_info$story_id_code)
+utility_matrix<-utility_mat[,3:num_cols]
+utility_matrix<-utility_matrix[,stories_with_text]
+story_ids<-colnames(utility_matrix)
+
+#filter by number of "0" interactions because the opposite of that is interactions (.3, .5, 1). High 0 number means new user.
+utility_matrix_old_activity <- utility_matrix[ which(rowSums(is.na(utility_matrix))<=1062),]
+utility_matrix_new_activity <- utility_matrix[ which(rowSums(is.na(utility_matrix))>1062),]
+
+#add 0s instead of NAs
+utility_matrix_old_activity[is.na(utility_matrix_old_activity)]<-0.0
+utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.0
+```
+
+```{r}
+
+# CODE COPIED FROM LIBBY'S S2M_split_new_old.Rmd
+
+#check that filtering is working
+mean(rowSums(utility_matrix_old_activity == 0))
+mean(rowSums(utility_matrix_new_activity == 0))
+summary(rowSums(utility_matrix_old_activity == 0))
+summary(rowSums(utility_matrix_new_activity == 0))
+
+#making old matrix
+utility_matrix_old_activity<-as.matrix(utility_matrix_old_activity)
+
+#making new matrix
+utility_matrix_new_activity<-as.matrix(utility_matrix_new_activity)
+
+rm(utility_mat)  # this variable is no longer needed
+```
+
+```{r params}
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20),
+               random=list(),
+               fm=params_fm,
+               ensemble=list())
+```
+
+
+```{r subgroup old}
+
+# CODE COPIED FROM OVERALL ANALYSIS CHUNK ABOVE
+# RUN THIS CODE CHUNK TWICE:
+# (1) For all models except ensemble
+# (2) For ensemble
+# This requires commenting/uncommenting in 3 places below
+
+# types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all except ensemble
+types <- c("ensemble") # Use for ensemble
+
+for (type in types) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
+folds=10, X=5, type=type, key="old", 
+# params=params[[type]]) # Use for all models except ensemble
+params=list()) # Use for ensemble
+}
+
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_old.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+# Use for all except ensemble
+# results_df_old_other <- tibble(type=types, usage="old", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+# Use for ensemble
+results_df_old_ensemble <- tibble(type=types, usage="old", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+```
+
+```{r subgroup new}
+
+# CODE COPIED FROM OVERALL ANALYSIS CHUNK ABOVE
+# RUN THIS CODE CHUNK TWICE:
+# (1) For all models except ensemble
+# (2) For ensemble
+# This requires commenting/uncommenting in 3 places below
+
+# types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all except ensemble
+types <- c("ensemble") # Use for ensemble
+
+for (type in types) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix_new_activity,
+folds=10, X=5, type=type, key="new", 
+# params=params[[type]]) # Use for all models except ensemble
+params=list()) # Use for ensemble
+}
+
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_new.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+# Use for all except ensemble
+# results_df_new_other <- tibble(type=types, usage="new", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+# Use for ensemble
+results_df_new_ensemble <- tibble(type=types, usage="new", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+```
+
+```{r plot results}
+# Combine ensemble with all other models
+results_df_old <- rbind(results_df_old_ensemble, results_df_old_other)
+results_df_new <- rbind(results_df_new_ensemble, results_df_new_other)
+
+# Combine old and new
+results_df <- rbind(results_df_old, results_df_new)
+results_df$usage <- as.factor(results_df$usage)
+
+# Plot
+plot_old <- ggplot(data = results_df_old) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type)) +
+  ggtitle("Old users") +
+  xlim(0, 0.2) +
+  ylim(0, 0.12)
+
+plot_new <- ggplot(data = results_df_new) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type)) +
+  ggtitle("New users") +
+  xlim(0, 0.2) +
+  ylim(0, 0.12)
+
+grid.arrange(plot_old, plot_new, ncol=2)
+```
+# JOHANNA'S NEW CODE ENDS HERE
+
+# DIVERSITY
 
 ```{r diversity}
 
@@ -143,7 +308,7 @@ engagement_types <- c("svd", "cbf", "ubcf", "ibcf")
 engagement_metric <- rep(NA,length(engagement_types))
 for (i in 1:length(engagement_types)){
 cat("Type: ", engagement_types[i], "\n")
-engagement_metric[i] <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, engagement_types[i])
+engagement_metric[i] <- compute_engagement_metric(utility_matrix, utility_matrix_na, 500, engagement_types[i])
 
 engagement_df <- tibble(type=engagement_types[i], engagement = engagement_metric[i])
 
