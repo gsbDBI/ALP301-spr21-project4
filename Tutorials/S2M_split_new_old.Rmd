@@ -174,7 +174,7 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
 filename = "rec_results_random_old.csv"
-save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename)
 
 rm(item_scores)
 rm(top_X_recommendations)
@@ -209,7 +209,7 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
 filename = "rec_results_ibcf_old.csv"
-save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename)
 
 rm(item_scores)
 rm(top_X_recommendations)
@@ -244,7 +244,7 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
 filename = "rec_results_cbf_old.csv"
-save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename)
 
 rm(item_scores)
 rm(top_X_recommendations)
@@ -280,7 +280,7 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
 filename = "rec_results_svd_old.csv"
-save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full =TRUE)
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename)
 
 rm(item_scores)
 rm(top_X_recommendations)
@@ -318,7 +318,7 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
 filename = "rec_results_ubcf_old.csv"
-save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full =TRUE)
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename)
 
 rm(item_scores)
 rm(top_X_recommendations)
@@ -356,7 +356,7 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix_old_activity, X=10)
 filename = "rec_results_fm_old.csv"
-save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full =TRUE)
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename)
 
 rm(item_scores)
 rm(top_X_recommendations)
