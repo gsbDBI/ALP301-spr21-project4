@@ -1,66 +1,3 @@
-### NOTE: This code only works for IBCF so far, I'm debugging the other models
-
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load(tidyverse)
-pacman::p_load(here)
-pacman::p_load(lmtest)
-pacman::p_load(glue)
-pacman::p_load(broom)
-pacman::p_load(ri2)
-pacman::p_load(margins)
-pacman::p_load(glmnet) 
-pacman::p_load(kableExtra)
-pacman::p_load(stargazer)
-pacman::p_load(knitr)
-pacman::p_load(doParallel)
-pacman::p_load(corrplot)
-
-rm(list = ls())
-
-# Set working directory
-setwd("/cloud/project/Tutorials")
-
-# Load story info
-story_info <- read_csv("Datasets/all_story_obs.csv")
-
-# Utility matrix that includes NA
-utility_mat <- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
-num_cols <- 2527
-child_ids <- as.integer(utility_mat$child_id_code)
-story_ids <- as.integer(colnames(utility_mat[,3:num_cols]))
-stories_with_text <- (story_ids %in% story_info$story_id_code)
-utility_matrix_na <- utility_mat[,3:num_cols]
-utility_matrix_na <- utility_matrix_na[,stories_with_text]
-story_ids <- colnames(utility_matrix_na)
-utility_matrix_na <- as.matrix(utility_matrix_na)
-rm(utility_mat)
-
-# Utility matrix that replaces NA with zero
-utility_mat <- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
-num_cols <- 2527
-child_ids <- as.integer(utility_mat$child_id_code)
-story_ids <- as.integer(colnames(utility_mat[,3:num_cols]))
-utility_mat[is.na(utility_mat)] <- 0.0
-stories_with_text <- (story_ids %in% story_info$story_id_code)
-utility_matrix <- utility_mat[,3:num_cols]
-utility_matrix <- utility_matrix[,stories_with_text]
-story_ids <- colnames(utility_matrix)
-utility_matrix <- as.matrix(utility_matrix)
-rm(utility_mat)
-
-# Import RecSys models
-source("../RecSys/Models/cbf.R", local = knitr::knit_global())
-source("../RecSys/Models/ibcf.R", local = knitr::knit_global())
-source("../RecSys/Models/svd.R", local = knitr::knit_global())
-source("../RecSys/Models/ubcf.R", local = knitr::knit_global())
-
-# Function that computes the average % change in engagement for n users
-# Inputs:
-#  - utility_matrix (where NAs are replaced with zero)
-#  - utility_matrix_na (where NAs are kept as-is)
-#  - n_users (select how many users you want to run the function on)
-#  - type (type of RecSys, only IBCF implemented so far)
-
 compute_engagement_metric <- function(utility_matrix, utility_matrix_na, n_users, type) {
   
   # TODO: Add more RecSys types
@@ -177,8 +114,3 @@ compute_engagement_metric <- function(utility_matrix, utility_matrix_na, n_users
   average_changes_average_utility
   
 }
-
-# Example:
-test <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, 'ibcf')
-test
-# Should return a 99.71% increase in engagement if n_users=1000 and type='ibcf'
