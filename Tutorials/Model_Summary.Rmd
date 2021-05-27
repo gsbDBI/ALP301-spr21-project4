@@ -1,0 +1,207 @@
+---
+title: "Model_Summary"
+output: html_document
+    highlight: haddock
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+date: "April 2021"
+---
+
+```{r load packages and functions}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse)
+pacman::p_load(here)
+pacman::p_load(lmtest)
+pacman::p_load(glue)
+pacman::p_load(broom)
+pacman::p_load(ri2)
+pacman::p_load(margins)
+pacman::p_load(glmnet) 
+pacman::p_load(kableExtra)
+pacman::p_load(stargazer)
+pacman::p_load(knitr)
+pacman::p_load(doParallel)
+pacman::p_load(corrplot)
+pacman::p_load(rsparse)
+pacman::p_load(sqldf)
+
+rm(list = ls())
+
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
+source("../Utils/save_recommender_results.R", local = knitr::knit_global())
+source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
+source("../Utils/test_all_but_k.R", local = knitr::knit_global())
+source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
+source("../Utils/get_fm_parameters.R", local = knitr::knit_global())
+source("../Utils/get_df_diversity.R", local = knitr::knit_global())
+source("../Utils/engagement_function_only.R", local = knitr::knit_global())
+```
+
+```{r utility matrix setup}
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+rows<-sample(1:nrow(utility_mat),size=5000)
+utility_mat <- utility_mat[rows,]
+num_cols <- 2527
+
+# Set overall utility matrix
+initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols, fill_zero <- 0.0)
+utility_matrix <- initialization$utility_matrix
+story_ids <- initialization$story_ids
+child_ids <- initialization$child_ids
+
+# Create NA matrix
+na_initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols, fill_zero <- -999)
+utility_matrix_na <- na_initialization$utility_matrix
+
+# Create parameters for FM
+params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
+
+```
+
+# ANALYSIS
+
+```{r analysis}
+# Run Analysis  
+types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
+
+params <- list(ibcf=list(),
+ubcf=list(),
+cbf=list(story_info=story_info, story_ids=story_ids),
+svd=list(d=20),
+random = list(),
+fm=params_fm)
+
+for (type in types) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix,
+folds=10, X=5, type=type, key="overall", params=params[[type]])
+}
+
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_overall.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+results_df <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+ggplot(data = results_df) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type))
+```
+
+
+```{r diversity}
+
+for (type in types){
+
+item_scores<-get_item_scores_generator(utility_matrix, type, params[[type]])
+top_X_recommendations<-function(userid, X, ratings_matrix){
+  get_top_x_recommendations(userid, X, ratings_matrix, item_scores)
+}
+
+recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
+filename <- paste("rec_results_",type,"_overall.csv", sep = "")
+save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+
+df <- get_df_diversity(filename = filename, utility_matrix, unknown_value = 0.0)
+assign(paste(type,"_df",sep = ""), df)
+}
+
+ggplot(df, aes(x, y = ..count.., fill = label)) +
+    geom_density(color = "black", alpha = 0.5) +
+    xlab("Number of readers") +
+    ylab("Density") + 
+    xlim(0, 1000)
+```
+
+```{r engagment}
+engagement_types <- c("svd", "cbf", "ubcf", "ibcf")
+engagement_metric <- rep(NA,length(engagement_types))
+for (i in 1:length(engagement_types)){
+cat("Type: ", engagement_types[i], "\n")
+engagement_metric[i] <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, engagement_types[i])
+
+engagement_df <- tibble(type=engagement_types[i], engagement = engagement_metric[i])
+
+if(i == 1){
+engagement_total <- engagement_df[FALSE,]
+}
+engagement_total <- rbind(engagement_total, engagement_df)
+}
+```
+
+
+```{r simulation skeleton}
+set.seed(123)
+
+for (i in 1:2){
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+rows<-sample(1:nrow(utility_mat),size=3000)
+utility_mat <- utility_mat[rows,]
+num_cols <- 2527
+
+# Set overall utility matrix
+initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols, fill_zero <- 0.0)
+utility_matrix <- initialization$utility_matrix
+story_ids <- initialization$story_ids
+child_ids <- initialization$child_ids
+
+# Create parameters for FM
+params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
+  
+# Run Analysis  
+types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
+
+params <- list(ibcf=list(),
+ubcf=list(),
+cbf=list(story_info=story_info, story_ids=story_ids),
+svd=list(d=20),
+random = list(),
+fm=params_fm)
+
+for (type in types) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix,
+folds=10, X=5, type=type, key="overall", params=params[[type]])
+}
+
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_overall.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+results_df <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector, i)
+
+if(i == 1){
+results_total <- results_df[FALSE,]
+}
+results_total <- rbind(results_total, results_df)
+}
+
+```
+
