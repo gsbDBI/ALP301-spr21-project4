@@ -32,6 +32,7 @@ pacman::p_load(stargazer)
 pacman::p_load(knitr)
 pacman::p_load(doParallel)
 pacman::p_load(corrplot)
+pacman::p_load(viridis)
 
 rm(list = ls())
 
@@ -78,6 +79,31 @@ We'll build an item-based collaborative filtering model as we did in our previou
 First, calculate cosine similarity for stories by building the similarity matrix using user activity.
 
 ```{r}
+sparsity <- sum(rowSums(utility_matrix>0)) / (ncol(utility_matrix) * nrow(utility_matrix))
+
+print(sparsity)
+
+items_interacted<-rowSums(utility_matrix>0)
+
+ggplot(data=data.frame(items_interacted), aes(x=items_interacted))+
+ geom_histogram()+
+xlab("Histogram of number items interacted (view/open/complete) per user")
+
+ggplot(data=data.frame(items_interacted), aes(x=items_interacted, y='User'))+
+ geom_boxplot()+
+ scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+  geom_jitter(color="black", size=0.4, alpha=0.9)+
+xlab("Histogram of number items interacted (view/open/complete) per user")
+
+users_interacted<-colSums(utility_matrix>0)
+
+ggplot(data=data.frame(users_interacted),aes(x=users_interacted))+
+ geom_histogram()+
+ xlab("Histogram of number users interacted (view/open/complete) per story")+
+xlim(c(0, 150))
+```
+
+```{r}
 #Ignore NA's for now:
 sim1<- t(utility_matrix) %*% (utility_matrix)
 sim2<- (colSums(utility_matrix)) %*% t(colSums(utility_matrix))
@@ -87,10 +113,12 @@ similarity_matrix <- sim1 / sim2
 Then, let's build our recommender function.
 ```{r}
 Itemitem_top_X_recommendations<-function(story_index,X){
-  sim_vector<-similarity_matrix[-story_index,story_index] #From the similarity matrix, lets get the vector corresponding to 'index of story'. 
+  sim_vector<-similarity_matrix[-story_index, story_index] 
+# From the similarity matrix, lets get the vector corresponding to 'index of story'. 
   index <- which(sim_vector >= sort(sim_vector, decreasing=T)[X], arr.ind=TRUE)
   return(index)
 }
+
 ```
 
 
@@ -173,6 +201,54 @@ get_story_details_2(1710)
 
 ## Question
 Plot the popularity of the overall items and the results of the  (top 1, top 5) item-based recommendations for every user, using code from the basic rec sys tutorial that you completed. Is this method recommending more popular items than average?
+```{r diversity_item_based_recs}
+
+# top recommendation
+recommender_results_item_one <- vector()
+for (i in 1:nrow(utility_matrix)) {
+  recommender_results_item_one <- union(
+    recommender_results_item_one,
+    Item_based_top_X_recommendations(utility_matrix[i, ], 1)
+  )
+}
+
+# top 5 recommendations
+recommender_results_item_five <- vector()
+for (i in 1:nrow(utility_matrix)) {
+  recommender_results_item_five <- union(
+    recommender_results_item_five,
+    Item_based_top_X_recommendations(utility_matrix[i, ], 5)
+  )
+}
+
+# First, note how many stories in total are recommended, out of 1087:
+length(recommender_results_item_one)
+length(recommender_results_item_five)
+```
+
+```{r plot_item_based_recs}
+index_results_one <- which(recommender_results_item_one %in% story_ids)
+index_results_five <- which(recommender_results_item_five %in% story_ids)
+
+popularity_ones <- colSums(utility_matrix[, index_results_one]>0.3)
+popularity_fives <- colSums(utility_matrix[, index_results_five]>0.3)
+
+readers_per_story <- (colSums(utility_matrix>0.3))
+
+# Create a data frame of recommendations
+df1 <- data.frame(x = readers_per_story, label = rep("Overall", length(readers_per_story)))
+df2 <- data.frame(x = popularity_fives, label = rep("Five_Recs", length(popularity_fives)))
+df3 <- data.frame(x = popularity_ones, label = rep("One_Rec", length(popularity_ones)))
+df <- rbind(df1, df2, df3)
+
+# Plot the number of readers per story
+ggplot(df, aes(x, y = ..count.., fill = label)) +
+  geom_density(color = "black", alpha = 0.5) +
+  xlab("Number of readers") +
+  ylab("Density") + 
+  xlim(0, 1000)
+
+```
 
 # User Similarity Based Recommendations:
 
@@ -222,6 +298,7 @@ recs<-User_top_X_recommendations(100,5,utility_matrix,similarity_matrix_user)
 print(recs)
 
 #Lets compare story `user_interacted` which is something they've read, vs our top user based recommendation""
+user_interacted<-names(utility_matrix[100,utility_matrix[100,]>0])
 get_story_details_2(user_interacted[1])
 get_story_details_2(recs[1])
 
@@ -230,6 +307,81 @@ get_story_details_2(recs[1])
 
 ## Question
 Plot the popularity of the overall items and the results of the  (top 1, top 5) user-based recommendations for every user. Is this method recommending more popular items than average?
+
+```{r diversity_user_based_recs_parallel, eval = False}
+
+# Note: This might take a while to run
+recommender_results_item_one <- vector()
+recommender_results_item_five <- vector()
+
+# Set up parallel processing
+all_cores <- min(parallel::detectCores(logical = FALSE), 8)
+doFuture::registerDoFuture()
+cl <- parallel::makeCluster(all_cores)
+future::plan("cluster", workers = cl)
+
+# Export objects to the parallel sessions
+parallel::clusterExport(cl, c("utility_matrix", "User_top_X_recommendations", "story_ids", "child_ids", "similarity_matrix_user"))
+
+recommender_results_item_one <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
+  return(User_top_X_recommendations(i, 1, utility_matrix, similarity_matrix_user))
+}
+
+recommender_results_item_five <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
+  return(User_top_X_recommendations(i, 5, utility_matrix, similarity_matrix_user))
+}
+
+parallel::stopCluster(cl)
+
+recommender_results_item_one <- unique(recommender_results_item_one)
+recommender_results_item_five <- unique(recommender_results_item_five)
+
+# First, note how many stories in total are recommended, out of 1087:
+length(recommender_results_item_one)
+length(recommender_results_item_five)
+```
+
+```{r diversity_user_based_recs_sequentiall, eval = FALSE}
+
+recommender_results_item_one <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
+  return(User_top_X_recommendations(i, 1, utility_matrix, similarity_matrix_user))
+}
+
+recommender_results_item_five <- foreach(i = 1:nrow(utility_matrix), .combine = append) %dopar% {
+  return(User_top_X_recommendations(i, 5, utility_matrix, similarity_matrix_user))
+}
+
+recommender_results_item_one <- unique(recommender_results_item_one)
+recommender_results_item_five <- unique(recommender_results_item_five)
+
+# First, note how many stories in total are recommended, out of 1087:
+length(recommender_results_item_one)
+length(recommender_results_item_five)
+```
+
+```{r plot_user_based_recs, eval = FALSE}
+index_results_one <- which(recommender_results_item_one %in% story_ids)
+index_results_five <- which(recommender_results_item_five %in% story_ids)
+
+popularity_ones <- colSums(utility_matrix[, index_results_one]>0.3)
+popularity_fives <- colSums(utility_matrix[, index_results_five]>0.3)
+
+readers_per_story <- (colSums(utility_matrix>0.3))
+
+# Create a data frame of recommendations
+df1 <- data.frame(x = readers_per_story, label = rep("Overall", length(readers_per_story)))
+df2 <- data.frame(x = popularity_fives, label = rep("Five_Recs", length(popularity_fives)))
+df3 <- data.frame(x = popularity_ones, label = rep("One_Rec", length(popularity_ones)))
+df <- rbind(df1, df2, df3)
+
+# Plot the number of readers per story
+ggplot(df, aes(x, y = ..count.., fill = label)) +
+  geom_density(color = "black", alpha = 0.5) +
+  xlab("Number of readers") +
+  ylab("Density") + 
+  xlim(0, 1000)
+
+```
 
 # Content Based Filtering
 
@@ -301,7 +453,43 @@ $$
 
 Let us now evaluate our algorithms. When calculating precision and recall, each user in the test set is taken as the current 'active user', and a random subset of their existing history is hidden. This means we will randomly remove part of the artists they listen to, and see how well our recommendations match with the held out data. There are various ways of doing this, and here we will use 'all but k'. For example, in "all but 1", if the user listened to 10 artists, we will use 9 of those to predict the 10th, or in "all but 5" we will use 5 of those to predict the remaining 5. Note that when evaluating performance using the 'all but k' approach, we can only use data points which have more than 'k' items. When calculating RMSE, we calculate the predicted score for every item, and calculate the squared difference between the predicted score and the actual ratings for every item and every user, and then rake the average.
 
-```{r}
+```{r Content-based evaluation}
+#All but K approach and RMSE, testing function:
+test_all_but_k_storychars<-function(k,ratings_matrix){
+  precision_vector<-vector()
+  recall_vector<-vector()
+  rmse_vector<-vector()
+  for (userid in 1:nrow(ratings_matrix)){
+    user=ratings_matrix[userid,]
+    index_of_known<-which(user!=0)
+    if(length(index_of_known)>k){
+      takeout<-sample(1:length(index_of_known),size=k)
+      stories_removed<-index_of_known[takeout]
+      save_old<-user[stories_removed]
+      user[stories_removed]<-0
+      ratings_matrix[userid,]<-user
+      recommended<-Story_char_based_top_X_recommendations(user,k)
+      matched=length(intersect(story_ids[stories_removed],recommended))
+      precision_vector<-append(precision_vector,matched/k)
+      recall_vector<-append(recall_vector,(matched/(length(index_of_known))))
+      user[stories_removed]<-save_old
+      ratings_matrix[userid,]<-user
+      itemscores<-All_Item_Scores_Story_char_filter(ratings_matrix[userid,])
+      rmse<- sqrt(mean((ratings_matrix[userid,]-itemscores)^2))
+      rmse_vector<-append(rmse_vector,rmse)
+    }
+  }
+  return(c("Precision"=mean(precision_vector),"Recall"=mean(recall_vector), "RMSE"=mean(rmse_vector)))
+}
+#Performance of content filtering
+test_all_but_k_storychars(1,utility_matrix)
+test_all_but_k_storychars(5,utility_matrix)
+test_all_but_k_storychars(10,utility_matrix)
+
+```
+
+
+```{r IBCF evaluation}
 #All but K approach and RMSE, testing function:
 test_all_but_k_items<-function(k,ratings_matrix){
   precision_vector<-vector()
@@ -336,7 +524,7 @@ test_all_but_k_items(10,utility_matrix)
 
 ```
 
-```{r, eval=FALSE}
+```{r UBCF}
 #This is not run by default,
 #because it takes a long time.
 #Delete "eval=FALSE" in rmarkdown
@@ -353,7 +541,7 @@ test_all_but_k_users<-function(k,ratings_matrix){
   recall_vector<-vector()
   rmse_vector<-vector()
   #Change the line below to run it on the entire dataset
-  num_rows=min(50,nrow(ratings_matrix))
+  num_rows=min(10,nrow(ratings_matrix))
   for (userid in 1:num_rows){
     user=ratings_matrix[userid,]
     index_of_known<-which(user!=0)
@@ -385,40 +573,7 @@ test_all_but_k_users(10,utility_matrix)
 ```
 
 
-```{r}
-#All but K approach and RMSE, testing function:
-test_all_but_k_storychars<-function(k,ratings_matrix){
-  precision_vector<-vector()
-  recall_vector<-vector()
-  rmse_vector<-vector()
-  for (userid in 1:nrow(ratings_matrix)){
-    user=ratings_matrix[userid,]
-    index_of_known<-which(user!=0)
-    if(length(index_of_known)>k){
-      takeout<-sample(1:length(index_of_known),size=k)
-      stories_removed<-index_of_known[takeout]
-      save_old<-user[stories_removed]
-      user[stories_removed]<-0
-      ratings_matrix[userid,]<-user
-      recommended<-Story_char_based_top_X_recommendations(user,k)
-      matched=length(intersect(story_ids[stories_removed],recommended))
-      precision_vector<-append(precision_vector,matched/k)
-      recall_vector<-append(recall_vector,(matched/(length(index_of_known))))
-      user[stories_removed]<-save_old
-      ratings_matrix[userid,]<-user
-      itemscores<-All_Item_Scores_Story_char_filter(ratings_matrix[userid,])
-      rmse<- sqrt(mean((ratings_matrix[userid,]-itemscores)^2))
-      rmse_vector<-append(rmse_vector,rmse)
-    }
-  }
-  return(c("Precision"=mean(precision_vector),"Recall"=mean(recall_vector), "RMSE"=mean(rmse_vector)))
-}
-#Performance of content filtering
-test_all_but_k_storychars(1,utility_matrix)
-test_all_but_k_storychars(5,utility_matrix)
-test_all_but_k_storychars(10,utility_matrix)
 
-```
 ## Questions
 
 Why do the testing functions give you three separate values for RMSE? Why are they increasing?
@@ -434,6 +589,8 @@ Combining the utility matrix with the user_info dataset, compare the performance
 Let's create a lower dimensional representation of our utility matrix.
 
 ```{r}
+
+ssh-add -K /home/rstudio-user/.ssh/id_rsa
 
 #Let's start with a 5-dimensional representation
 d<-5
@@ -476,7 +633,6 @@ get_story_details_2(as.numeric(toprec))
 
 ## Cross Validation for SVD
 
-
 How do we choose how many dimensions to use? It's a good idea to do cross-validation, using precision at K as our metric.
 
 ```{r, eval=FALSE}
@@ -486,9 +642,9 @@ How do we choose how many dimensions to use? It's a good idea to do cross-valida
 #and run it yourself.
 
 # Parallelize computing to make things faster
-cluster <- makeCluster(min(detectCores(logical = TRUE) - 1,8)) 
+cluster <- parallel::makeCluster(min(parallel::detectCores(logical = TRUE) - 1, 8)) 
 registerDoParallel(cluster)
-clusterEvalQ(cluster, {})
+parallel::clusterEvalQ(cluster, {})
 
 folds <- 5
 splitfolds <- sample(1:folds, nrow(utility_matrix), replace = TRUE)
@@ -496,7 +652,7 @@ candidate_d <- c(2,4,6,8,10,12,14,16,18,20) #Candidate dimensions
 k<-5 #We will use precision at 5
 
 # Export objects to the parallel sessions
-clusterExport(cluster, c("utility_matrix", "splitfolds", "folds", "candidate_d","SVD_top_X_recommendations","k","story_ids"))
+parallel::clusterExport(cluster, c("utility_matrix", "splitfolds", "folds", "candidate_d","SVD_top_X_recommendations","k","story_ids"))
 
 system.time({
 results <- foreach(j = 1:length(candidate_d), .combine = rbind) %dopar%{
@@ -542,7 +698,7 @@ results <- foreach(j = 1:length(candidate_d), .combine = rbind) %dopar%{
    return(results_cv)
 }
 })
-stopCluster(cluster)
+parallel::stopCluster(cluster)
 
 
 ggplot(data=data.frame(results),aes(x=d,y=rmse))+
