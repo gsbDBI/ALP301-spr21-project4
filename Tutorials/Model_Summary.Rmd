@@ -51,7 +51,7 @@ source("../Utils/engagement_function_only.R", local = knitr::knit_global())
 ```{r utility matrix setup}
 story_info<- read_csv("Datasets/all_story_obs.csv")
 utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
-rows<-sample(1:nrow(utility_mat),size=5000)
+rows<-sample(1:nrow(utility_mat),size=5000) # was 5000
 utility_mat <- utility_mat[rows,]
 num_cols <- 2527
 
@@ -74,19 +74,22 @@ params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
 
 ```{r analysis}
 # Run Analysis  
-types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
+# types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all models except ensemble
+types <- c("ensemble") # Use for ensemble
 
 params <- list(ibcf=list(),
 ubcf=list(),
 cbf=list(story_info=story_info, story_ids=story_ids),
 svd=list(d=20),
-random = list(),
-fm=params_fm)
+random=list(),
+fm=params_fm,
+ensemble=list()) # NEW
 
 for (type in types) {
 cat("Type: ", type, "\n")
 cross_validation_recsys(utility_matrix=utility_matrix,
-folds=10, X=5, type=type, key="overall", params=params[[type]])
+# folds=10, X=5, type=type, key="overall", params=params[[type]]) # Use for all models except ensemble
+folds=10, X=5, type=type, key="overall", params=list()) # Use for ensemble
 }
 
 
@@ -107,6 +110,9 @@ ggplot(data = results_df) +
                            size=rmse, color=type))
 ```
 
+```{r}
+results_df
+```
 
 ```{r diversity}
 
