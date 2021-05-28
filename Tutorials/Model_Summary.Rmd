@@ -51,8 +51,8 @@ source("../Utils/engagement_function_only.R", local = knitr::knit_global())
 ```{r utility matrix setup}
 story_info<- read_csv("Datasets/all_story_obs.csv")
 utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
-rows<-sample(1:nrow(utility_mat),size=5000)
-utility_mat <- utility_mat[rows,]
+# rows<-sample(1:nrow(utility_mat),size=5000)
+# utility_mat <- utility_mat[rows,]
 num_cols <- 2527
 unknown_value <- 0.1
 
@@ -76,6 +76,7 @@ params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
 # Run Analysis  
 types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
 
+
 params <- list(ibcf=list(),
 ubcf=list(),
 cbf=list(story_info=story_info, story_ids=story_ids),
@@ -86,24 +87,36 @@ fm=params_fm)
 for (type in types) {
 cat("Type: ", type, "\n")
 cross_validation_recsys(utility_matrix=utility_matrix,
-folds=10, X=5, type=type, key="overall", params=params[[type]], unknown_value)
+folds=10, X=5, type=type, key="overall_1", params=params[[type]], unknown_value = unknown_value)
 }
 
 precision_vector<-rep(NA,length(types))
 recall_vector<-rep(NA,length(types))
 rmse_vector<-rep(NA,length(types))
 for (k in 1:length(types)) {
-results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_overall.csv", sep = ""))
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_overall_1.csv", sep = ""))
 precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
 recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
 rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
 }
 
-results_df <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+results_df <- tibble(type=types, usage="overall_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
-ggplot(data = results_df) + 
+ggplot(data = results_df) +
   geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
                            size=rmse, color=type))
+```
+
+
+```{r}
+user <- utility_matrix[1,]
+index_of_known <- which(user!= 0.0)
+length(index_of_known)
+
+
+user <- utility_matrix_1[1,]
+index_of_known <- which(user!= 0.1)
+length(index_of_known)
 ```
 
 
