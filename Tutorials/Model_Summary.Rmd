@@ -122,8 +122,6 @@ ggplot(data = results_df) +
   geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
                            size=rmse, color=type))
 ```
-```
-
 
 # JOHANNA'S NEW CODE STARTS HERE
 # SUBGROUP ANALYSIS
