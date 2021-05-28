@@ -109,8 +109,10 @@ compute_engagement_metric <- function(utility_matrix, utility_matrix_na, n_users
   average_changes_average_utility <- mean(changes_average_utility)
   average_actual_utilities_interacted <- mean(actual_utilities_interacted)
   
-  # Return result
-  # Average % change in engagement across the n users
-  average_changes_average_utility
+  # Return results
+  results <- list("change"=average_changes_average_utility, 
+                  "interacted"=average_predicted_interacted_all,
+                  "recommended"=average_predicted_recommended_all)
+  results
   
 }

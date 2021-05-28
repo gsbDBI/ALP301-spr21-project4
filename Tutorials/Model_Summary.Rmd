@@ -46,7 +46,7 @@ source("../Utils/test_all_but_k.R", local = knitr::knit_global())
 source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
 source("../Utils/get_fm_parameters.R", local = knitr::knit_global())
 source("../Utils/get_df_diversity.R", local = knitr::knit_global())
-source("../Utils/engagement_function_only.R", local = knitr::knit_global())
+source("../Utils/engagement_function_only.R", local = knitr::knit_global()) # Not used, see engagement code chunk below
 ```
 
 ```{r utility matrix setup}
@@ -75,8 +75,8 @@ params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
 
 ```{r analysis}
 # Run Analysis  
-# types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all models except ensemble
-types <- c("ensemble") # Use for ensemble
+types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all models except ensemble
+# types <- c("ensemble") # Use for ensemble
 
 params <- list(ibcf=list(),
 ubcf=list(),
@@ -90,8 +90,8 @@ for (type in types) {
 cat("Type: ", type, "\n")
 cross_validation_recsys(utility_matrix=utility_matrix,
 folds=10, X=5, type=type, key="overall", 
-# params=params[[type]]) # Use for all models except ensemble
-params=list()) # Use for ensemble
+params=params[[type]]) # Use for all models except ensemble
+# params=list()) # Use for ensemble
 }
 
 
@@ -106,10 +106,10 @@ rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
 }
 
 # Use for all except ensemble
-# results_df_other <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+results_df_other <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
 # Use for ensemble
-results_df_ensemble <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+# results_df_ensemble <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
 ```
 
@@ -311,25 +311,14 @@ ggplot(df, aes(x, y = ..count.., fill = label)) +
     xlim(0, 1000)
 ```
 
-```{r engagment}
-engagement_types <- c("svd", "cbf", "ubcf", "ibcf")
-engagement_types <- c("ibcf")
-engagement_metric <- rep(NA,length(engagement_types))
-for (i in 1:length(engagement_types)){
-cat("Type: ", engagement_types[i], "\n")
-engagement_metric[i] <- compute_engagement_metric(utility_matrix, utility_matrix_na, 500, engagement_types[i])
-
-engagement_df <- tibble(type=engagement_types[i], engagement = engagement_metric[i])
-
-if(i == 1){
-engagement_total <- engagement_df[FALSE,]
-}
-engagement_total <- rbind(engagement_total, engagement_df)
-}
+```{r engagement lift}
+source("../Utils/compute_engagement_metric.R", local = knitr::knit_global())
+results <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, "svd")
+results$change
 ```
-
-```{r}
-compute_engagement_metric(utility_matrix, utility_matrix_na, 500, "ibcf")
+```{r engagement plot}
+hist(results$interacted, col="#e87d71", breaks=100, xlim=c(0, 0.007), ylim=c(0,70), border=F)
+hist(results$recommended, col="#55bcc1", breaks=100, xlim=c(0, 0.007), ylim=c(0,70), border=F)
 ```
 
 
