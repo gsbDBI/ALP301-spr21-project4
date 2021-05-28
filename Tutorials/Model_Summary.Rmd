@@ -75,8 +75,8 @@ params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
 
 ```{r analysis}
 # Run Analysis  
-types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all models except ensemble
-# types <- c("ensemble") # Use for ensemble
+# types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf") # Use for all models except ensemble
+types <- c("ensemble") # Use for ensemble
 
 params <- list(ibcf=list(),
 ubcf=list(),
@@ -84,13 +84,14 @@ cbf=list(story_info=story_info, story_ids=story_ids),
 svd=list(d=20),
 random=list(),
 fm=params_fm,
-ensemble=list()) # NEW
+ensemble=list())
 
 for (type in types) {
 cat("Type: ", type, "\n")
 cross_validation_recsys(utility_matrix=utility_matrix,
-folds=10, X=5, type=type, key="overall", params=params[[type]]) # Use for all models except ensemble
-# folds=10, X=5, type=type, key="overall", params=list()) # Use for ensemble
+folds=10, X=5, type=type, key="overall", 
+# params=params[[type]]) # Use for all models except ensemble
+params=list()) # Use for ensemble
 }
 
 
@@ -104,16 +105,25 @@ recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
 rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
 }
 
-results_df <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+# Use for all except ensemble
+# results_df_other <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
+# Use for ensemble
+results_df_ensemble <- tibble(type=types, usage="overall", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+```
+
+```{r plot results}
+# Combine results for all models
+results_df <- rbind(results_df_other, results_df_ensemble)
+
+# Plot
 ggplot(data = results_df) + 
   geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
                            size=rmse, color=type))
 ```
-
-```{r results df}
-results_df
 ```
+
 
 # JOHANNA'S NEW CODE STARTS HERE
 # SUBGROUP ANALYSIS
@@ -305,6 +315,7 @@ ggplot(df, aes(x, y = ..count.., fill = label)) +
 
 ```{r engagment}
 engagement_types <- c("svd", "cbf", "ubcf", "ibcf")
+engagement_types <- c("ibcf")
 engagement_metric <- rep(NA,length(engagement_types))
 for (i in 1:length(engagement_types)){
 cat("Type: ", engagement_types[i], "\n")
@@ -317,6 +328,10 @@ engagement_total <- engagement_df[FALSE,]
 }
 engagement_total <- rbind(engagement_total, engagement_df)
 }
+```
+
+```{r}
+compute_engagement_metric(utility_matrix, utility_matrix_na, 500, "ibcf")
 ```
 
 
