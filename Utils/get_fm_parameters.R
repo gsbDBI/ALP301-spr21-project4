@@ -9,6 +9,7 @@ get_fm_parameters <- function(utility_mat, story_info, story_ids, child_ids){
   user_info <- read_csv("/cloud/project/Tutorials/Datasets/user_interests.csv")
   # read child-story interaction data
   utility_data_raw<-read_csv(utils_raw_file, col_types = cols(.default = col_double()))
+  dim(utility_data_raw)
   story_attr <- c("totpage","wordcount","story_id_code","n_people")
   user_attr <- c("i_Life_skills","grade", "user_id")
   seed_value <- 123

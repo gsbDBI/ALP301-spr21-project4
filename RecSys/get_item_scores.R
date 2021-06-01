@@ -13,6 +13,7 @@ if (!exists("run_source_fm")) run_source_fm <- TRUE
 if (!exists("run_source_random")) run_source_random <- TRUE
 
 path = "/cloud/project/RecSys"
+
 get_item_scores_generator<-function(utility_matrix, type, params=list()) {
   if(type == 'ubcf') {
     if(run_source_ubcf) source(paste(path, "/Models/ubcf.R", sep=""), local = knitr::knit_global())

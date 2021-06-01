@@ -18,9 +18,10 @@ recommender_results_data_frame<-function(recommender_fun, recommender_fun_args){
 }
 
 
-save_recommender_results<-function(recommender_fun, recommender_fun_args, filename, full=FALSE, limit_rows=NaN){
-  
-  if(full) {
+save_recommender_results<-function(recommender_fun, recommender_fun_args, filename, full=FALSE, limit_rows=NaN, freq_save=1000){
+  file_exists <- file.exists(paste("/cloud/project/Results/",filename, sep = ""))
+  if(full || !file_exists) {
+    cat("Creating file ", filename, "in `/cloud/project/Results/`\n")
     recommender_fun_args[["userid"]] <- 1
     recommender_results_item <- recommender_results_data_frame(recommender_fun, recommender_fun_args)
     next_user = 2
@@ -43,10 +44,14 @@ save_recommender_results<-function(recommender_fun, recommender_fun_args, filena
       recommender_results_item = rbind(recommender_results_item, rows)
       num_new_rows <- num_new_rows + length(rows)
     }
-    if (is.finite(limit_rows)) {
+    if (is.finite(limit_rows)) { # Only fill in a limited number of rows
       if (num_new_rows > limit_rows) {
         break
       }
+    }
+    if (i %% freq_save == 0) {
+      cat("Updating file at user: ", i, "\n")
+      write.csv(recommender_results_item, paste("/cloud/project/Results/",filename, sep = ""), row.names = FALSE) 
     }
   }
   

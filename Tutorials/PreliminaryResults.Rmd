@@ -31,6 +31,7 @@ pacman::p_load(tidyverse)
 # pacman::p_load(stargazer)
 # pacman::p_load(knitr)
 pacman::p_load(doParallel)
+pacman::p_load(rsparse)
 pacman::p_load(corrplot)
 
 rm(list = ls())
@@ -42,14 +43,16 @@ utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.defau
 # utility_mat <- utility_mat[rows, ]
 
 source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
-initialization <- initialize_utility_matrix(utility_mat, story_info)
+unknown_value <- 0.1
+initialization <- initialize_utility_matrix(utility_mat, story_info, unknown_value=unknown_value)
+# utility_mat[is.na(utility_mat)]<-unknown_value
 
 utility_matrix <- initialization$utility_matrix
 story_ids <- initialization$story_ids
 child_ids <- initialization$child_ids
 
-rm(utility_mat)  # this variable is no longer needed
 rm(initialization)
+
 ```
 
 ```{r alternative}
@@ -57,7 +60,64 @@ source("../RecSys/get_item_scores.R", local = knitr::knit_global())
 source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
 source("../Utils/save_recommender_results.R", local = knitr::knit_global())
 source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
-source("../Utils/test_all_but_k.R", local = knitr::knit_global())
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
+```
+
+```{r, message = FALSE, warning = FALSE}
+source("../Utils/get_fm_parameters.R", local = knitr::knit_global())
+params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
+rm(utility_mat)  # this variable is no longer needed
+```
+
+```{r old users create recs}
+types <- c("cbf", "svd", "ibcf", "ubcf", "fm", "random")
+
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20),
+               fm=params_fm,
+               random=list())
+
+for (type in c("cbf")) {
+  cat("Type: ", type, "\n")
+  cross_validation_recsys(utility_matrix=utility_matrix,
+                                   folds=10, X=5, type=type, key="1", params=params[[type]],
+                          unknown_value=unknown_value)
+}
+
+```
+
+
+```{r}
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_0.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results0_df <- tibble(type=types, unknown_value="0.0", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_1.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results1_df <- tibble(type=types, unknown_value="0.1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+results <- rbind(results0_df, results1_df)
+results$unknown_value <- as.factor(results$unknown_value)
+
+ggplot(data = results, aes(x = precision.at.5, y = recall.at.5, group=unknown_value)) + 
+  geom_point(mapping = aes(size=rmse, fill=type), alpha=0.5, pch=21) +
+  facet_wrap(~ unknown_value)
 ```
 
 ```{r, eval=FALSE}
