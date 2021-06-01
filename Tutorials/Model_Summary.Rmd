@@ -19,6 +19,7 @@ date: "April 2021"
 ```{r load packages and functions}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse)
+pacman::p_load(gridExtra)
 pacman::p_load(here)
 pacman::p_load(lmtest)
 pacman::p_load(glue)
@@ -67,6 +68,7 @@ na_initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols
 utility_matrix_na <- na_initialization$utility_matrix
 
 # Create parameters for FM
+utility_mat[is.na(utility_mat)]<-unknown_value
 params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
 ```
 
@@ -108,20 +110,173 @@ ggplot(data = results_df) +
 ```
 
 
-```{r}
-user <- utility_matrix[1,]
-index_of_known <- which(user!= 0.0)
-length(index_of_known)
+```{r ensemble}
+type_ensemble <- c("ensemble") # Use for ensemble
+for (type in type_ensemble) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix,
+folds=10, X=5, type=type, params=list(), key="overall_1", unknown_value = unknown_value)
+}
+precision_vector<-rep(NA,length(type_ensemble))
+recall_vector<-rep(NA,length(type_ensemble))
+rmse_vector<-rep(NA,length(type_ensemble))
+for (k in 1:length(type_ensemble)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",type_ensemble[k],"_overall_1.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
 
+# Use for ensemble
+results_df_ensemble <- tibble(type=type_ensemble, usage="overall_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
-user <- utility_matrix_1[1,]
-index_of_known <- which(user!= 0.1)
-length(index_of_known)
+results_df <- rbind(results_df, results_df_ensemble)
+ggplot(data = results_df) +
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type))
+```
+
+```{r old vs new setup}
+utility_matrix_old_activity <- utility_matrix_na[ which(rowSums(is.na(utility_matrix_na))<=1062),]
+utility_matrix_new_activity <- utility_matrix_na[ which(rowSums(is.na(utility_matrix_na))>1062),]
+#add 0.1s instead of NAs
+utility_matrix_old_activity[is.na(utility_matrix_old_activity)]<-0.1
+utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.1 
+```
+
+```{r run old}
+types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
+
+params <- list(ibcf=list(),
+ubcf=list(),
+cbf=list(story_info=story_info, story_ids=story_ids),
+svd=list(d=20),
+random = list(),
+fm=params_fm)
+
+for (type in types) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
+folds=10, X=5, type=type, key="old_1", params=params[[type]], unknown_value = unknown_value)
+}
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_old_1.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+results_df_old <- tibble(type=types, usage="old_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+type_ensemble <- c("ensemble") # Use for ensemble
+for (type in type_ensemble) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
+folds=10, X=5, type=type, params=list(), key="old_1", unknown_value = unknown_value)
+# params=params[[type]]) # Use for all models except ensemble
+ # Use for ensemble
+}
+precision_vector<-rep(NA,length(type_ensemble))
+recall_vector<-rep(NA,length(type_ensemble))
+rmse_vector<-rep(NA,length(type_ensemble))
+for (k in 1:length(type_ensemble)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",type_ensemble[k],"_old_1.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+# Use for ensemble
+results_df_ensemble_old <- tibble(type=type_ensemble, usage="old_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+results_df_old <- rbind(results_df_old, results_df_ensemble_old)
+ggplot(data = results_df_old) +
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type))
 ```
 
 
-```{r diversity}
+```{r run new}
+types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
 
+params <- list(ibcf=list(),
+ubcf=list(),
+cbf=list(story_info=story_info, story_ids=story_ids),
+svd=list(d=20),
+random = list(),
+fm=params_fm)
+
+for (type in types) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix_new_activity,
+folds=10, X=5, type=type, key="new_1", params=params[[type]], unknown_value = unknown_value)
+}
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_new_1.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+results_df_new <- tibble(type=types, usage="new_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+type_ensemble <- c("ensemble") # Use for ensemble
+for (type in type_ensemble) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix_new_activity,
+folds=10, X=5, type=type, params=list(), key="new_1", unknown_value = unknown_value)
+# params=params[[type]]) # Use for all models except ensemble
+ # Use for ensemble
+}
+precision_vector<-rep(NA,length(type_ensemble))
+recall_vector<-rep(NA,length(type_ensemble))
+rmse_vector<-rep(NA,length(type_ensemble))
+for (k in 1:length(type_ensemble)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",type_ensemble[k],"_new_1.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+# Use for all except ensemble
+# Use for ensemble
+results_df_ensemble_new <- tibble(type=type_ensemble, usage="new_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+results_df_new <- rbind(results_df_new, results_df_ensemble_new)
+ggplot(data = results_df_new) +
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type))
+```
+```{r}
+results_df_total <- rbind(results_df_old, results_df_new)
+results_df_total$usage <- as.factor(results_df_total$usage)
+# Plot
+plot_old <- ggplot(data = results_df_old) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type)) +
+  ggtitle("High activity") +
+  xlim(0, 0.18) +
+  ylim(0, 0.06)
+plot_new <- ggplot(data = results_df_new) + 
+  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
+                           size=rmse, color=type)) +
+  ggtitle("Low activity") +
+  xlim(0, 0.18) +
+  ylim(0, 0.06)
+grid.arrange(plot_old, plot_new, ncol=2)
+```
+
+```{r diversity}
+# types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
+types <- c("svd", "ubcf")
 for (type in types){
 
 item_scores<-get_item_scores_generator(utility_matrix, type, params[[type]])
@@ -130,21 +285,34 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 }
 
 recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
-filename <- paste("rec_results_",type,"_overall.csv", sep = "")
+filename <- paste("rec_results_",type,"_overall_1.csv", sep = "")
 save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
 
 df <- get_df_diversity(filename = filename, utility_matrix, unknown_value)
 assign(paste(type,"_df",sep = ""), df)
 }
 
-ggplot(df, aes(x, y = ..count.., fill = label)) +
+```
+```{r}
+svd_plot <- ggplot(svd_df, aes(x, y = ..count.., fill = label)) +
     geom_density(color = "black", alpha = 0.5) +
     xlab("Number of readers") +
-    ylab("Density") + 
-    xlim(0, 1000)
+    ylab("Density") +
+    xlim(0, 1000) +
+    ggtitle("SVD Recommendation Diversity")
+
+ubcf_plot <- ggplot(ubcf_df, aes(x, y = ..count.., fill = label)) +
+    geom_density(color = "black", alpha = 0.5) +
+    xlab("Number of readers") +
+    ylab("Density") +
+    xlim(0, 1000)+
+    ggtitle("UBCF Recommendation Diversity")
+
+grid.arrange(svd_plot, ubcf_plot, ncol=2)
+
 ```
 
-```{r engagment}
+```{r engagement}
 engagement_types <- c("svd", "cbf", "ubcf", "ibcf")
 engagement_metric <- rep(NA,length(engagement_types))
 for (i in 1:length(engagement_types)){
@@ -222,7 +390,4 @@ ggplot(data = results_total) +
 
 ```
 
-```{r}
-
-```
 

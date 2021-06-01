@@ -1,7 +1,7 @@
 # Title     : Get All Item Scores
 # Objective : Get all the items score from a user
-# Created by: juan & johanna
-# Created on: 5/8/21, modified 5/25/21
+# Created by: juan
+# Created on: 5/8/21
 
 run_get_item_scores <- FALSE
 
@@ -12,8 +12,13 @@ if (!exists("run_source_cbf")) run_source_cbf <- TRUE
 if (!exists("run_source_fm")) run_source_fm <- TRUE
 if (!exists("run_source_random")) run_source_random <- TRUE
 
-path = "/cloud/project/RecSys"
+source("../RecSys/Models/cbf.R", local = knitr::knit_global())
+source("../RecSys/Models/ibcf.R", local = knitr::knit_global())
+source("../RecSys/Models/svd.R", local = knitr::knit_global())
+source("../RecSys/Models/ubcf.R", local = knitr::knit_global())
 
+
+path = "/cloud/project/RecSys"
 get_item_scores_generator<-function(utility_matrix, type, params=list()) {
   if(type == 'ubcf') {
     if(run_source_ubcf) source(paste(path, "/Models/ubcf.R", sep=""), local = knitr::knit_global())
@@ -65,26 +70,26 @@ get_item_scores_generator<-function(utility_matrix, type, params=list()) {
     )
   } else if(type == 'ensemble') {
     if(run_source_cbf) source(paste(path, "/Models/cbf.R", sep=""), local = knitr::knit_global())
-    similarity_matrix_story <- cbf_get_similarity_matrix(utility_matrix, params[["cbf"]]) # Made parameters explicit
-
+    similarity_matrix_story <- cbf_get_similarity_matrix(utility_matrix, list(story_info=story_info, story_ids=story_ids)) # Made parameters explicit
+    
     if(run_source_ubcf) source(paste(path, "/Models/ubcf.R", sep=""), local = knitr::knit_global())
     similarity_matrix_user <- ubcf_get_similarity_matrix(utility_matrix)
-
+    
     if(run_source_ibcf) source(paste(path, "/Models/ibcf.R", sep=""), local = knitr::knit_global())
     similarity_matrix_item <- ibcf_get_similarity_matrix(utility_matrix)
-
+    
     if(run_source_svd) source(paste(path, "/Models/svd.R", sep=""), local = knitr::knit_global())
-    factors <- svd_get_decomposition(utility_matrix, params[["svd"]]) # Made parameters explicit
-
+    factors <- svd_get_decomposition(utility_matrix, list(d=20)) # Made parameters explicit
+    
     return(
       function(userid, ratings_matrix) {
         x1 = cbf_get_item_scores(userid, ratings_matrix, similarity_matrix_story)
         x2 = ubcf_get_item_scores(userid, ratings_matrix, similarity_matrix_user)
         x3 = ibcf_get_item_scores(userid, ratings_matrix, similarity_matrix_item)
         x4 = svd_get_item_scores(userid, factors$U, factors$Vprime)
-
+        
         w <- c(0.25, 0.25, 0.25, 0.25)
-
+        
         w[1] * x1 + w[2] * x2 + w[3] * x3 + w[4] * x4
       }
     )
