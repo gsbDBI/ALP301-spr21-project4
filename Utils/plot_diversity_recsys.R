@@ -1,3 +1,8 @@
+# Title     : Plot Diversity Recommendation System
+# Objective : Plot the diversity of recommendations saved in a .csv file
+# Created by: Juan
+# Created on: 5/8/21
+
 plot_diversity_recsys<-function(filename, ratings_matrix) {
   recommender_results <- read.csv(file = paste("/cloud/project/Results/",filename, sep = ""))
   recommender_results_item_one <- recommender_results %>% filter(item_rank <= 1) %>% select(story_id) %>% unique()

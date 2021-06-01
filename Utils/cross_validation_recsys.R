@@ -1,11 +1,20 @@
+# Title     : Cross-validation RecSys
+# Objective : Obtain precision, recall and RMSE for a particular type of model
+# though corss validations
+# Created by: juan
+# Created on: 5/8/21
+
 cross_validation_recsys <- function(utility_matrix, folds, X, type, params, key="", seed=301, unknown_value = 0.0) {
   set.seed(seed)
   splitfolds <- sample(1:folds, nrow(utility_matrix), replace = TRUE)
   results_cv <- matrix(NA, nrow = folds, ncol = 5)
+  # Iterate through each of the k folds
   for (k in 1:folds){
     cat("\tFold: ", k,"\n")
     colnames(results_cv) <- c("k","precision at 5","recall at 5","rmse","n")
     
+    # Create training utility matrix by removing X random story interactions 
+    # form the users in the test fold
     train_set <- utility_matrix
     valid_users <- which(splitfolds == k)
     stories_removed <- list()
@@ -19,11 +28,13 @@ cross_validation_recsys <- function(utility_matrix, folds, X, type, params, key=
       }
     }
     
+    # Train the recommendation system with the adjusted utility matrix
     recommender <- get_item_scores_generator(train_set, type, params)
     precision_vector<-rep(NA,length(valid_users))
     recall_vector<-rep(NA,length(valid_users))
     rmse_vector<-rep(NA,length(valid_users))
     
+    # Compute the precision, recall and rmse for the users in the test fold
     for (userid in valid_users){
       user <- utility_matrix[userid,]
       index_of_known <- which(user!= unknown_value)

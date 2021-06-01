@@ -20,6 +20,7 @@ source("../RecSys/Models/ubcf.R", local = knitr::knit_global())
 
 path = "/cloud/project/RecSys"
 get_item_scores_generator<-function(utility_matrix, type, params=list()) {
+  # For each type we fit the corresponding model and then create a querying function
   if(type == 'ubcf') {
     if(run_source_ubcf) source(paste(path, "/Models/ubcf.R", sep=""), local = knitr::knit_global())
     similarity_matrix_user <- ubcf_get_similarity_matrix(utility_matrix)
