@@ -1,0 +1,161 @@
+```{r, message = FALSE, warning = FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse)
+pacman::p_load(here)
+pacman::p_load(lmtest)
+pacman::p_load(glue)
+pacman::p_load(broom)
+pacman::p_load(ri2)
+pacman::p_load(margins)
+pacman::p_load(glmnet) 
+pacman::p_load(kableExtra)
+pacman::p_load(stargazer)
+pacman::p_load(knitr)
+pacman::p_load(doParallel)
+pacman::p_load(rsparse)
+pacman::p_load(corrplot)
+rm(list = ls())
+story_info<- read_csv("Datasets/all_story_obs.csv")
+utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
+unknown_value <- 0.1
+source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
+initialization <- initialize_utility_matrix(utility_mat, story_info, unknown_value=unknown_value)
+utility_mat[is.na(utility_mat)]<-unknown_value
+utility_matrix <- initialization$utility_matrix
+story_ids <- initialization$story_ids
+child_ids <- initialization$child_ids
+```
+
+```{r Get the users from each subgroup, message = FALSE, warning = FALSE}
+child_info <- read_csv("Datasets/child.csv")
+child_id_mapping <- read_csv("Datasets/child_mapping.csv")
+child_grade <- left_join(child_info, child_id_mapping, by = "child_id") %>% 
+  filter(child_id_code %in% child_ids) %>% select(child_id_code, grade)
+pre_users <- child_grade %>% filter(grade %in% c("Nursery", "Junior KG", "Senior KG")) %>%
+  select(child_id_code) %>% arrange(child_id_code)
+mid_users <- child_grade %>% filter(grade %in% c("Grade 1", "Grade 2", "Grade 3")) %>%
+  select(child_id_code) %>% arrange(child_id_code)
+old_users <- child_grade %>% filter(grade %in% c("Grade 4", "Grade 5", "Grade 6")) %>%
+  select(child_id_code) %>% arrange(child_id_code)
+```
+
+```{r create the utility matrix for each subgroup}
+user_id <- utility_mat$child_id_code
+index_pre <- which(user_id %in% pre_users$child_id_code)
+utility_matrix_pre <- utility_matrix[index_pre, ]
+index_1_3 <- which(user_id %in% mid_users$child_id_code)
+utility_matrix_1_3 <- utility_matrix[index_1_3, ]
+index_4_6 <- which(user_id %in% old_users$child_id_code)
+utility_matrix_4_6 <- utility_matrix[index_4_6, ]
+
+dim(utility_matrix)
+dim(utility_matrix_pre)
+dim(utility_matrix_1_3)
+dim(utility_matrix_4_6)
+
+
+#add 0s instead of NAs
+utility_matrix_pre[is.na(utility_matrix_pre)]<-unknown_value
+utility_matrix_1_3[is.na(utility_matrix_1_3)]<-unknown_value
+utility_matrix_4_6[is.na(utility_matrix_4_6)]<-unknown_value
+```
+
+```{r create the utility mat for each subgroup}
+# This utility_mat_* are used for the FM parameters
+utility_mat_pre <- utility_mat[index_pre, ]
+utility_mat_1_3 <- utility_mat[index_1_3, ]
+utility_mat_4_6 <- utility_mat[index_4_6, ]
+
+rm(utility_mat)
+```
+
+```{r load necessary functions, message = FALSE, warning = FALSE}
+source("../RecSys/get_item_scores.R", local = knitr::knit_global())
+source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
+source("../Utils/cross_validation_recsys.R", local = knitr::knit_global())
+source("../Utils/save_recommender_results.R", local = knitr::knit_global())
+source("../Utils/plot_diversity_recsys.R", local = knitr::knit_global())
+source("../Utils/get_fm_parameters.R", local = knitr::knit_global())
+
+```
+
+# Cross-validation
+
+Here we compute the FM parameters for the utility_mat of the subgroup we want to analyze. This same block is used to compute the parameters for each sub group
+
+```{r Cross-validation for each model and subgroup}
+
+params_fm_cv <- get_fm_parameters(utility_mat_4_6, story_info, story_ids, child_ids)
+rm(utility_mat_4_6)
+# the first 3 characters are the grade group and the last number symbolizes the value used to fill NaN
+key <- "4_6_1"
+utility_matrix_cv <- utility_matrix_4_6
+types <- c("random","cbf", "svd", "ibcf", "ubcf", "fm", "ensemble")
+
+params <- list(ibcf=list(),
+               ubcf=list(),
+               cbf=list(story_info=story_info, story_ids=story_ids),
+               svd=list(d=20),
+               random = list(),
+               fm = params_fm_cv,
+               ensemble=list(cbf=list(story_info=story_info, story_ids=story_ids),
+                             svd=list(d=20)
+                             )
+               )
+
+for (type in types) {
+  cat("Type: ", type, "\n")
+  # Here we have to switch the utility_matrix to that of the subgroup we want to analyze
+  cross_validation_recsys(utility_matrix=utility_matrix_cv,
+                                   folds=10, X=5, type=type, key=key, params=params[[type]], unknown_value=unknown_value)
+}
+
+```
+
+# Plot cross-validation results
+
+```{r Load and plot the results for each model and subgroup}
+
+types <- c("random","cbf", "svd", "ibcf", "ubcf", "fm", "ensemble")
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_pre_1.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results0_df <- tibble(type=types, grade_group="pre", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_1_3_1.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results1_df <- tibble(type=types, grade_group="1_3", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+  results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_4_6_1.csv", sep = ""))
+  precision_vector[k] <- mean(results_type$precision.at.5)
+  recall_vector[k] <- mean(results_type$recall.at.5)
+  rmse_vector[k] <- mean(results_type$rmse)
+}
+results2_df <- tibble(type=types, grade_group="4_6", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+results <- rbind(results0_df, results1_df, results2_df)
+results$grade_group <- as.factor(results$grade_group)
+ggplot(data = results, aes(x = precision.at.5, y = recall.at.5, group=grade_group)) + 
+  # geom_point(mapping = aes(size=rmse, fill=type), alpha=0.5, pch=21) +
+  geom_point(aes(size=rmse, color=type)) + 
+  facet_wrap(~ grade_group)
+
+```
