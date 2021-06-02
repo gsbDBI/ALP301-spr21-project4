@@ -1,5 +1,3 @@
-### NOTE: This code only works for IBCF so far, I'm debugging the other models
-
 # if (!require("pacman")) install.packages("pacman")
 # pacman::p_load(tidyverse)
 # pacman::p_load(here)
@@ -182,6 +180,6 @@ compute_engagement_metric <- function(utility_matrix, utility_matrix_na, n_users
 }
 
 # Example:
-test <- compute_engagement_metric(utility_matrix, utility_matrix_na, 10, 'ibcf')
+test <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, 'ibcf')
 test
 # Should return a 99.71% increase in engagement if n_users=1000 and type='ibcf'
