@@ -317,8 +317,11 @@ results <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, "s
 results$change
 ```
 ```{r engagement plot}
-hist(results$interacted, col="#e87d71", breaks=100, xlim=c(0, 0.007), ylim=c(0,70), border=F)
-hist(results$recommended, col="#55bcc1", breaks=100, xlim=c(0, 0.007), ylim=c(0,70), border=F)
+hist(results$interacted, col="#e87d71", breaks=100, xlim=c(0.0, 0.007), ylim=c(0,70), border=F)
+hist(results$recommended, col="#55bcc1", breaks=100, xlim=c(0.00, 0.007), ylim=c(0,70), border=F)
+```
+```{r}
+results$interacted
 ```
 
 
