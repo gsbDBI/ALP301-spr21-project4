@@ -47,7 +47,7 @@ source("../Utils/test_all_but_k.R", local = knitr::knit_global())
 source("../Utils/initialize_utility_matrix.R", local = knitr::knit_global())
 source("../Utils/get_fm_parameters.R", local = knitr::knit_global())
 source("../Utils/get_df_diversity.R", local = knitr::knit_global())
-source("../Utils/engagement_function_only.R", local = knitr::knit_global())
+source("../Utils/compute_engagement_metric.R", local = knitr::knit_global())
 ```
 
 ```{r utility matrix setup, echo=FALSE, message=FALSE, warning=FALSE}
@@ -321,20 +321,18 @@ grid.arrange(svd_plot, ubcf_plot, ncol=2)
 
 ```
 
-```{r engagement, echo=FALSE, message=FALSE, warning=FALSE}
-engagement_types <- c("svd", "cbf", "ubcf", "ibcf")
-engagement_metric <- rep(NA,length(engagement_types))
-for (i in 1:length(engagement_types)){
-cat("Type: ", engagement_types[i], "\n")
-engagement_metric[i] <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, engagement_types[i])
+```{r engagement lift}
+results <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, "svd")
+results$change
+```
 
-engagement_df <- tibble(type=engagement_types[i], engagement = engagement_metric[i])
+```{r engagement plot}
+hist(results$interacted, col="#e87d71", breaks=100, xlim=c(0.0, 0.007), ylim=c(0,70), border=F)
+hist(results$recommended, col="#55bcc1", breaks=100, xlim=c(0.00, 0.007), ylim=c(0,70), border=F)
+```
 
-if(i == 1){
-engagement_total <- engagement_df[FALSE,]
-}
-engagement_total <- rbind(engagement_total, engagement_df)
-}
+```{r}
+results$interacted
 ```
 
 
