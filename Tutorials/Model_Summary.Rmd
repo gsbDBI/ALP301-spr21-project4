@@ -1,6 +1,7 @@
 ---
 title: "Model_Summary"
-output: html_document
+output:
+  html_document:
     highlight: haddock
     number_sections: no
     theme: journal
@@ -16,7 +17,7 @@ output: html_document
 date: "April 2021"
 ---
 
-```{r load packages and functions}
+```{r load packages and functions, echo=FALSE, message=FALSE, warning=FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse)
 pacman::p_load(gridExtra)
@@ -49,7 +50,7 @@ source("../Utils/get_df_diversity.R", local = knitr::knit_global())
 source("../Utils/engagement_function_only.R", local = knitr::knit_global())
 ```
 
-```{r utility matrix setup}
+```{r utility matrix setup, echo=FALSE, message=FALSE, warning=FALSE}
 story_info<- read_csv("Datasets/all_story_obs.csv")
 utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
 # rows<-sample(1:nrow(utility_mat),size=5000)
@@ -74,7 +75,7 @@ params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
 
 # ANALYSIS
 
-```{r analysis}
+```{r analysis, echo=FALSE, message=FALSE, warning=FALSE}
 # Calculate model results on full data with (non-ensemble)
 
 types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
@@ -130,12 +131,7 @@ ggplot(data = results_df) +
                            size=rmse, color=type))
 ```
 
-
-```{r ensemble}
-
-```
-
-```{r old vs new setup}
+```{r old vs new setup, echo=FALSE, message=FALSE, warning=FALSE}
 # Define old and new users with input of utility matrix with NAs
 utility_matrix_old_activity <- utility_matrix_na[ which(rowSums(is.na(utility_matrix_na))<=1062),]
 utility_matrix_new_activity <- utility_matrix_na[ which(rowSums(is.na(utility_matrix_na))>1062),]
@@ -145,7 +141,7 @@ utility_matrix_old_activity[is.na(utility_matrix_old_activity)]<-0.1
 utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.1 
 ```
 
-```{r run old}
+```{r run old, echo=FALSE, message=FALSE, warning=FALSE}
 # Calculate model results for old users (non-ensemble)
 
 types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
@@ -204,7 +200,7 @@ ggplot(data = results_df_old) +
 ```
 
 
-```{r new user analysis}
+```{r new user analysis, echo=FALSE, message=FALSE, warning=FALSE}
 # Calculate model results for new users (non-ensemble)
 types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
 
@@ -259,7 +255,7 @@ ggplot(data = results_df_new) +
   geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
                            size=rmse, color=type))
 ```
-```{r plot old vs new user activity}
+```{r plot old vs new user activity, echo=FALSE, message=FALSE, warning=FALSE}
 results_df_total <- rbind(results_df_old, results_df_new)
 
 # Plot
@@ -278,7 +274,7 @@ plot_new <- ggplot(data = results_df_new) +
 grid.arrange(plot_old, plot_new, ncol=2)
 ```
 
-```{r diversity}
+```{r diversity, echo=FALSE, message=FALSE, warning=FALSE}
 # types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
 # Found SVD and UBCF to be the best recommenders, so only plotted those 2
 types <- c("svd", "ubcf")
@@ -325,7 +321,7 @@ grid.arrange(svd_plot, ubcf_plot, ncol=2)
 
 ```
 
-```{r engagement}
+```{r engagement, echo=FALSE, message=FALSE, warning=FALSE}
 engagement_types <- c("svd", "cbf", "ubcf", "ibcf")
 engagement_metric <- rep(NA,length(engagement_types))
 for (i in 1:length(engagement_types)){
