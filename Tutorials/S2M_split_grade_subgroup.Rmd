@@ -1,3 +1,24 @@
+---
+title: 'Grade Subgroup Analysis'
+output:
+  html_document:
+    highlight: haddock
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+date: "May 2021"
+---
+
+# Initialization
+
 ```{r, message = FALSE, warning = FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse)
@@ -26,6 +47,8 @@ story_ids <- initialization$story_ids
 child_ids <- initialization$child_ids
 ```
 
+Now we want to get the users from each subgroup.
+
 ```{r Get the users from each subgroup, message = FALSE, warning = FALSE}
 child_info <- read_csv("Datasets/child.csv")
 child_id_mapping <- read_csv("Datasets/child_mapping.csv")
@@ -39,6 +62,7 @@ old_users <- child_grade %>% filter(grade %in% c("Grade 4", "Grade 5", "Grade 6"
   select(child_id_code) %>% arrange(child_id_code)
 ```
 
+After we have selected the users, we generate the corresponding utility matrices.
 ```{r create the utility matrix for each subgroup}
 user_id <- utility_mat$child_id_code
 index_pre <- which(user_id %in% pre_users$child_id_code)
@@ -54,7 +78,7 @@ dim(utility_matrix_1_3)
 dim(utility_matrix_4_6)
 
 
-#add 0s instead of NAs
+#add `unkown_value` instead of NAs
 utility_matrix_pre[is.na(utility_matrix_pre)]<-unknown_value
 utility_matrix_1_3[is.na(utility_matrix_1_3)]<-unknown_value
 utility_matrix_4_6[is.na(utility_matrix_4_6)]<-unknown_value
@@ -69,6 +93,7 @@ utility_mat_4_6 <- utility_mat[index_4_6, ]
 rm(utility_mat)
 ```
 
+We now load the necessary functions in order to realize the necessary analysis.
 ```{r load necessary functions, message = FALSE, warning = FALSE}
 source("../RecSys/get_item_scores.R", local = knitr::knit_global())
 source("../RecSys/get_top_x_recommendations.R", local = knitr::knit_global())
@@ -81,9 +106,9 @@ source("../Utils/get_fm_parameters.R", local = knitr::knit_global())
 
 # Cross-validation
 
-Here we compute the FM parameters for the utility_mat of the subgroup we want to analyze. This same block is used to compute the parameters for each sub group
+Here we compute the FM parameters for the utility_mat of the subgroup we want to analyze. This block is used to compute the parameters for each sub group manually.
 
-```{r Cross-validation for each model and subgroup}
+```{r Cross-validation for each model and subgroup, eval=FALSE}
 
 params_fm_cv <- get_fm_parameters(utility_mat_4_6, story_info, story_ids, child_ids)
 rm(utility_mat_4_6)
@@ -114,7 +139,9 @@ for (type in types) {
 
 # Plot cross-validation results
 
-```{r Load and plot the results for each model and subgroup}
+We can generate the results plots by using the cross-validation results that where saved in the previous block.
+
+```{r Load and plot the results for each model and subgroup, message = FALSE, warning = FALSE}
 
 types <- c("random","cbf", "svd", "ibcf", "ubcf", "fm", "ensemble")
 
@@ -127,7 +154,7 @@ for (k in 1:length(types)) {
   recall_vector[k] <- mean(results_type$recall.at.5)
   rmse_vector[k] <- mean(results_type$rmse)
 }
-results0_df <- tibble(type=types, grade_group="pre", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+results0_df <- tibble(type=types, grade_group="0", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
 precision_vector<-rep(NA,length(types))
 recall_vector<-rep(NA,length(types))
@@ -138,7 +165,7 @@ for (k in 1:length(types)) {
   recall_vector[k] <- mean(results_type$recall.at.5)
   rmse_vector[k] <- mean(results_type$rmse)
 }
-results1_df <- tibble(type=types, grade_group="1_3", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+results1_df <- tibble(type=types, grade_group="1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
 precision_vector<-rep(NA,length(types))
 recall_vector<-rep(NA,length(types))
@@ -149,13 +176,17 @@ for (k in 1:length(types)) {
   recall_vector[k] <- mean(results_type$recall.at.5)
   rmse_vector[k] <- mean(results_type$rmse)
 }
-results2_df <- tibble(type=types, grade_group="4_6", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+results2_df <- tibble(type=types, grade_group="2", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+labs <- c("Pre-School", "Grades 1 to 3", "Grades 4 to 6")
+names(labs) <- c("0", "1", "2")
 
 results <- rbind(results0_df, results1_df, results2_df)
 results$grade_group <- as.factor(results$grade_group)
 ggplot(data = results, aes(x = precision.at.5, y = recall.at.5, group=grade_group)) + 
   # geom_point(mapping = aes(size=rmse, fill=type), alpha=0.5, pch=21) +
   geom_point(aes(size=rmse, color=type)) + 
-  facet_wrap(~ grade_group)
+  facet_wrap(~ grade_group, labeller = labeller(grade_group = labs))+
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 3))
 
 ```
