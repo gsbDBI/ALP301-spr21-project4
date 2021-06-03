@@ -17,7 +17,7 @@ output:
 date: "April 2021"
 ---
 
-```{r load packages and functions, echo=FALSE, message=FALSE, warning=FALSE}
+```{r load packages and functions, echo=TRUE, message=FALSE, warning=FALSE}
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse)
 pacman::p_load(gridExtra)
@@ -50,13 +50,13 @@ source("../Utils/get_df_diversity.R", local = knitr::knit_global())
 source("../Utils/compute_engagement_metric.R", local = knitr::knit_global())
 ```
 
-```{r utility matrix setup, echo=FALSE, message=FALSE, warning=FALSE}
+```{r utility matrix setup, echo=TRUE, message=FALSE, warning=FALSE}
 story_info<- read_csv("Datasets/all_story_obs.csv")
 utility_mat<- read_csv("Datasets/utils_mat_filtered.csv",col_types = cols(.default = col_double()))
 # rows<-sample(1:nrow(utility_mat),size=5000)
 # utility_mat <- utility_mat[rows,]
 num_cols <- 2527
-unknown_value <- 0.0
+unknown_value <- 0.1
 
 # Set overall utility matrix
 initialization <- initialize_utility_matrix(utility_mat, story_info, num_cols, fill_zero <- unknown_value)
@@ -71,11 +71,15 @@ utility_matrix_na <- na_initialization$utility_matrix
 # Create parameters for FM
 utility_mat[is.na(utility_mat)]<-unknown_value
 params_fm <- get_fm_parameters(utility_mat, story_info, story_ids, child_ids)
+
+# Different model types
+types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
+type_ensemble <- c("ensemble")
 ```
 
 # ANALYSIS
 
-```{r analysis, echo=FALSE, message=FALSE, warning=FALSE}
+```{r analysis, echo=TRUE, message=FALSE, warning=FALSE, eval=FALSE}
 # Calculate model results on full data with (non-ensemble)
 
 types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
@@ -92,6 +96,19 @@ cross_validation_recsys(utility_matrix=utility_matrix,
 folds=10, X=5, type=type, key="overall_1", params=params[[type]], unknown_value = unknown_value)
 }
 
+# Calculate model results on full data with (ensemble)
+
+type_ensemble <- c("ensemble")
+for (type in type_ensemble) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix,
+folds=10, X=5, type=type, params=list(), key="overall_1", unknown_value = unknown_value)
+}
+
+```
+
+```{r compile results, echo=TRUE, message=FALSE, warning=FALSE}
+# Non-ensemble
 precision_vector<-rep(NA,length(types))
 recall_vector<-rep(NA,length(types))
 rmse_vector<-rep(NA,length(types))
@@ -104,14 +121,7 @@ rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
 
 results_df <- tibble(type=types, usage="overall_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
-# Calculate model results on full data with (ensemble)
-
-type_ensemble <- c("ensemble")
-for (type in type_ensemble) {
-cat("Type: ", type, "\n")
-cross_validation_recsys(utility_matrix=utility_matrix,
-folds=10, X=5, type=type, params=list(), key="overall_1", unknown_value = unknown_value)
-}
+# ensemble
 precision_vector<-rep(NA,length(type_ensemble))
 recall_vector<-rep(NA,length(type_ensemble))
 rmse_vector<-rep(NA,length(type_ensemble))
@@ -131,6 +141,7 @@ ggplot(data = results_df) +
                            size=rmse, color=type))
 ```
 
+
 ```{r old vs new setup, echo=FALSE, message=FALSE, warning=FALSE}
 # Define old and new users with input of utility matrix with NAs
 utility_matrix_old_activity <- utility_matrix_na[ which(rowSums(is.na(utility_matrix_na))<=1062),]
@@ -141,7 +152,7 @@ utility_matrix_old_activity[is.na(utility_matrix_old_activity)]<-0.1
 utility_matrix_new_activity[is.na(utility_matrix_new_activity)]<-0.1 
 ```
 
-```{r run old, echo=FALSE, message=FALSE, warning=FALSE}
+```{r run old, echo=TRUE, message=FALSE, warning=FALSE, eval=FALSE}
 # Calculate model results for old users (non-ensemble)
 
 types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
@@ -159,19 +170,6 @@ cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
 folds=10, X=5, type=type, key="old_1", params=params[[type]], unknown_value = unknown_value)
 }
 
-precision_vector<-rep(NA,length(types))
-recall_vector<-rep(NA,length(types))
-rmse_vector<-rep(NA,length(types))
-for (k in 1:length(types)) {
-results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_old_1.csv", sep = ""))
-precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
-recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
-rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
-}
-
-results_df_old <- tibble(type=types, usage="old_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
-
-
 # Calculate model results for old users (ensemble)
 
 type_ensemble <- c("ensemble")
@@ -180,27 +178,11 @@ cat("Type: ", type, "\n")
 cross_validation_recsys(utility_matrix=utility_matrix_old_activity,
 folds=10, X=5, type=type, params=list(), key="old_1", unknown_value = unknown_value)
 }
-precision_vector<-rep(NA,length(type_ensemble))
-recall_vector<-rep(NA,length(type_ensemble))
-rmse_vector<-rep(NA,length(type_ensemble))
-for (k in 1:length(type_ensemble)) {
-results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",type_ensemble[k],"_old_1.csv", sep = ""))
-precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
-recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
-rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
-}
 
-results_df_ensemble_old <- tibble(type=type_ensemble, usage="old_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
-
-# Combine ensemble results with results for all other models
-results_df_old <- rbind(results_df_old, results_df_ensemble_old)
-ggplot(data = results_df_old) +
-  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
-                           size=rmse, color=type))
 ```
 
 
-```{r new user analysis, echo=FALSE, message=FALSE, warning=FALSE}
+```{r new user analysis, echo=TRUE, message=FALSE, warning=FALSE, eval=FALSE}
 # Calculate model results for new users (non-ensemble)
 types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
 
@@ -217,6 +199,49 @@ cross_validation_recsys(utility_matrix=utility_matrix_new_activity,
 folds=10, X=5, type=type, key="new_1", params=params[[type]], unknown_value = unknown_value)
 }
 
+# Calculate model results for new users (ensemble)
+type_ensemble <- c("ensemble")
+
+for (type in type_ensemble) {
+cat("Type: ", type, "\n")
+cross_validation_recsys(utility_matrix=utility_matrix_new_activity,
+folds=10, X=5, type=type, params=list(), key="new_1", unknown_value = unknown_value)
+}
+```
+
+```{r compile analysis results, echo=TRUE, message=FALSE, warning=FALSE}
+# Old Users Non-Ensemble
+precision_vector<-rep(NA,length(types))
+recall_vector<-rep(NA,length(types))
+rmse_vector<-rep(NA,length(types))
+for (k in 1:length(types)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",types[k],"_old_1.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+results_df_old <- tibble(type=types, usage="old_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+# Old Users - Ensemble
+precision_vector<-rep(NA,length(type_ensemble))
+recall_vector<-rep(NA,length(type_ensemble))
+rmse_vector<-rep(NA,length(type_ensemble))
+for (k in 1:length(type_ensemble)) {
+results_type <- read_csv(paste("../Results/top_5_10_fold_cv_",type_ensemble[k],"_old_1.csv", sep = ""))
+precision_vector[k] <- weighted.mean(results_type$precision.at.5, results_type$n)
+recall_vector[k] <- weighted.mean(results_type$recall.at.5, results_type$n)
+rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
+}
+
+results_df_ensemble_old <- tibble(type=type_ensemble, usage="old_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
+
+# Combine ensemble results with results for all other models
+results_df_old <- rbind(results_df_old, results_df_ensemble_old)
+
+
+# New Users - Non Ensemble
+
 precision_vector<-rep(NA,length(types))
 recall_vector<-rep(NA,length(types))
 rmse_vector<-rep(NA,length(types))
@@ -229,14 +254,7 @@ rmse_vector[k] <- weighted.mean(results_type$rmse, results_type$n)
 
 results_df_new <- tibble(type=types, usage="new_1", precision.at.5=precision_vector, recall.at.5=recall_vector, rmse=rmse_vector)
 
-# Calculate model results for new users (ensemble)
-type_ensemble <- c("ensemble")
-
-for (type in type_ensemble) {
-cat("Type: ", type, "\n")
-cross_validation_recsys(utility_matrix=utility_matrix_new_activity,
-folds=10, X=5, type=type, params=list(), key="new_1", unknown_value = unknown_value)
-}
+# New Users - Ensemble
 precision_vector<-rep(NA,length(type_ensemble))
 recall_vector<-rep(NA,length(type_ensemble))
 rmse_vector<-rep(NA,length(type_ensemble))
@@ -251,11 +269,10 @@ results_df_ensemble_new <- tibble(type=type_ensemble, usage="new_1", precision.a
 
 # Combine ensemble results with results for all other models
 results_df_new <- rbind(results_df_new, results_df_ensemble_new)
-ggplot(data = results_df_new) +
-  geom_point(mapping = aes(x = precision.at.5, y = recall.at.5,
-                           size=rmse, color=type))
+
 ```
-```{r plot old vs new user activity, echo=FALSE, message=FALSE, warning=FALSE}
+
+```{r plot old vs new user activity, echo=TRUE, message=FALSE, warning=FALSE}
 results_df_total <- rbind(results_df_old, results_df_new)
 
 # Plot
@@ -274,7 +291,7 @@ plot_new <- ggplot(data = results_df_new) +
 grid.arrange(plot_old, plot_new, ncol=2)
 ```
 
-```{r diversity, echo=FALSE, message=FALSE, warning=FALSE}
+```{r diversity, echo=TRUE, message=FALSE, warning=FALSE, eval=FALSE}
 # types <- c("fm", "svd", "cbf", "ubcf", "random", "ibcf")
 # Found SVD and UBCF to be the best recommenders, so only plotted those 2
 types <- c("svd", "ubcf")
@@ -297,7 +314,13 @@ top_X_recommendations<-function(userid, X, ratings_matrix){
 recommender_fun_args <- list(ratings_matrix=utility_matrix, X=10)
 filename <- paste("rec_results_",type,"_overall_1.csv", sep = "")
 save_recommender_results(top_X_recommendations, recommender_fun_args, filename, full=TRUE)
+}
+```
 
+```{r diversity plots, echo=TRUE, message=FALSE, warning=FALSE}
+types <- c("svd", "ubcf")
+for (type in types){
+filename <- paste("rec_results_",type,"_overall_1.csv", sep = "")
 df <- get_df_diversity(filename = filename, utility_matrix, unknown_value)
 assign(paste(type,"_df",sep = ""), df)
 }
@@ -321,18 +344,15 @@ grid.arrange(svd_plot, ubcf_plot, ncol=2)
 
 ```
 
-```{r engagement lift}
+```{r engagement lift, echo=TRUE, message=FALSE, warning=FALSE}
+source("../Utils/compute_engagement_metric.R", local = knitr::knit_global())
 results <- compute_engagement_metric(utility_matrix, utility_matrix_na, 1000, "svd")
 results$change
 ```
 
-```{r engagement plot}
+```{r engagement plot, echo=TRUE, message=FALSE, warning=FALSE}
 hist(results$interacted, col="#e87d71", breaks=100, xlim=c(0.0, 0.007), ylim=c(0,70), border=F)
 hist(results$recommended, col="#55bcc1", breaks=100, xlim=c(0.00, 0.007), ylim=c(0,70), border=F)
-```
-
-```{r}
-results$interacted
 ```
 
 
